@@ -1,0 +1,107 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// ENUMS
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+}
+
+enum TicketStatus {
+  OPEN
+  ON_PROGRESS
+  RESOLVED
+}
+
+/// MODELS
+
+model User {
+  id          String   @id @default(uuid())
+  name        String
+  email       String   @unique
+  passwordHash String  @map("password_hash")
+  role        UserRole @default(USER)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  conversations Conversation[]
+  tickets       Ticket[]
+  articles      KnowledgeArticle[]
+  logs          ActivityLog[]
+}
+
+model Conversation {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  title     String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user     User     @relation(fields: [userId], references: [id])
+  messages Message[]
+  tickets  Ticket[]
+}
+
+model Message {
+  id               String   @id @default(uuid())
+  conversationId   String   @map("conversation_id")
+  role             MessageRole
+  content          String
+  imageUrl         String?  @map("image_url")
+  confidenceScore  Float?   @map("confidence_score")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+  tickets      Ticket[]
+}
+
+model Ticket {
+  id             String       @id @default(uuid())
+  userId         String       @map("user_id")
+  conversationId String       @map("conversation_id")
+  messageId      String       @map("message_id")
+  title          String
+  description    String
+  status         TicketStatus @default(OPEN)
+  adminResponse  String?      @map("admin_response")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  user         User         @relation(fields: [userId], references: [id])
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+  message      Message      @relation(fields: [messageId], references: [id])
+}
+
+model KnowledgeArticle {
+  id         String   @id @default(uuid())
+  createdBy  String   @map("created_by")
+  title      String
+  content    String
+  category   String
+  embedding  Unsupported("vector") 
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  author User @relation(fields: [createdBy], references: [id])
+}
+
+model ActivityLog {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  action    String
+  metadata  Json
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+}
