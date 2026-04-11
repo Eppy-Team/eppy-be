@@ -20,7 +20,7 @@ export class AuthService {
   async register(dto: RegisterDto) {
     const existing = await this.authRepository.findUserByEmail(dto.email);
     if (existing) {
-      throw new ConflictException('Email already registered');
+      throw new ConflictException('Email is already registered');
     }
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
@@ -32,7 +32,7 @@ export class AuthService {
     });
 
     return {
-      message: 'Registration successful',
+      message: 'User Registered Successfully',
       data: user,
     };
   }
@@ -40,12 +40,12 @@ export class AuthService {
   async login(dto: LoginDto) {
     const user = await this.authRepository.findUserByEmail(dto.email);
     if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('Invalid email or password');
     }
 
     const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
     if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('Invalid email or password');
     }
 
     const payload: JwtPayload = {
@@ -67,6 +67,15 @@ export class AuthService {
           role: user.role,
         },
       },
+    };
+  }
+
+  async me(userId: string) {
+    const user = await this.authRepository.findUserById(userId);
+ 
+    return {
+      message: 'User data retrieved successfully',
+      data: user,
     };
   }
 }
