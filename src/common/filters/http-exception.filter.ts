@@ -13,7 +13,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
     let statusCode = 500;
     let message = 'Internal server error';
-    let errors: any = null;
+    let errors: any = [];
 
     if (exception instanceof HttpException) {
       statusCode = exception.getStatus();
@@ -22,8 +22,15 @@ export class HttpExceptionFilter implements ExceptionFilter {
       if (typeof res === 'string') {
         message = res;
       } else {
-        message = (res as any).message || message;
-        errors = (res as any).message || null;
+        const r = res as any;
+
+        if (Array.isArray(r.message)) {
+          message = 'Validation failed';
+          errors = r.message;
+        } else {
+          message = r.message || message;
+          errors = r.errors || [];
+        }
       }
     }
 
