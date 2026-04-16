@@ -11,4 +11,4 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
-    command: sh -c "node_modules/.bin/prisma migrate deploy && node dist/main"
+    command: sh -c "node_modules/.bin/prisma migrate deploy && node dist/src/main"
