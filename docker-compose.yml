@@ -1,0 +1,33 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: eppy-db
+    restart: always
+    environment:
+      POSTGRES_USER: eppy
+      POSTGRES_PASSWORD: eppy123
+      POSTGRES_DB: eppy_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build: .
+    container_name: eppy-be
+    restart: unless-stopped
+    depends_on:
+      - db
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://eppy:eppy123@db:5432/eppy_db
+      JWT_SECRET_KEY: your_secret
+      JWT_EXPIRES_IN: 7d
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: sh -c "npx prisma generate && npx prisma migrate dev && npm run start:dev"
+
+volumes:
+  postgres_data:
