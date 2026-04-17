@@ -1,4 +1,5 @@
 import { NestFactory } from '@nestjs/core';
+import { VersioningType } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -23,7 +24,11 @@ async function bootstrap() {
   app.useGlobalInterceptors(new ResponseInterceptor());
 
   // Global API prefix
-  app.setGlobalPrefix('api/v1');
+  app.setGlobalPrefix('api');
+  app.enableVersioning({
+    type: VersioningType.URI,
+    defaultVersion: '1',
+  });
 
   await app.listen(3000, '0.0.0.0');
   console.log(`Server is running on port ${process.env.PORT ?? 3000}`);
