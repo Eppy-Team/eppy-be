@@ -23,7 +23,7 @@ async function bootstrap() {
   app.useGlobalInterceptors(new ResponseInterceptor());
 
   // Global API prefix
-  app.setGlobalPrefix('api');
+  app.setGlobalPrefix('api/v1');
 
   await app.listen(3000, '0.0.0.0');
   console.log(`Server is running on port ${process.env.PORT ?? 3000}`);
