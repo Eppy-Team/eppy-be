@@ -2,22 +2,24 @@ import { IsString, IsOptional } from 'class-validator';
 
 /**
  * Update Knowledge Article DTO
- *
- * Data Transfer Object for handling knowledge article update requests.
- * All fields are optional, allowing for partial updates to the title, category, or both.
- *
- * @property title - The updated article title (optional).
- * @property category - The updated article category (optional).
- *
- * @remarks
- * At least one field must be provided to perform a meaningful update.
- * Validation is enforced via class-validator decorators.
+ * * Handles partial updates for an existing knowledge article.
+ * Allows modification of metadata without re-uploading the original file.
  */
 export class UpdateKnowledgeDto {
+  /**
+   * The new title for the article.
+   * @example "Advanced RAG Architectures"
+   * @constraints Optional, String.
+   */
   @IsString()
   @IsOptional()
   title?: string;
 
+  /**
+   * The updated category for the article.
+   * @example "Machine Learning"
+   * @constraints Optional, String.
+   */
   @IsString()
   @IsOptional()
   category?: string;

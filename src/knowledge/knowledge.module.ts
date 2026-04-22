@@ -8,20 +8,20 @@ import { PrismaService } from '../prisma/prisma.service';
 
 /**
  * Knowledge Module
+ * * A core feature module that manages the system's knowledge base.
+ * It encapsulates the entire lifecycle of a knowledge article—from 
+ * initial PDF upload and cloud storage to AI-driven vector embedding.
  *
- * Feature module for comprehensive knowledge base management.
- * Provides REST API endpoints for knowledge article CRUD operations,
- * integrated with file upload support and automatic AI-powered embedding.
- *
- * Exports:
- * - KnowledgeController: REST endpoints for article management.
- * - KnowledgeService: Core business logic and orchestration.
- * - KnowledgeRepository: Direct data access layer.
+ * @remarks
+ * Orchestration Logic:
+ * This module acts as a bridge between the StorageModule (S3) and AiModule (Embeddings),
+ * ensuring that database records, physical files, and vector representations 
+ * remain synchronized.
  *
  * Dependencies:
- * - AiModule: Facilitates embedding generation and vectorization.
- * - StorageModule: Handles S3 file storage operations.
- * - PrismaService: Provides underlying database access.
+ * - AiModule: Provides services for generating text embeddings and vector storage.
+ * - StorageModule: Handles low-level AWS S3 file operations.
+ * - PrismaService: Facilitates persistent storage in the relational database.
  */
 @Module({
   imports: [AiModule, StorageModule],
