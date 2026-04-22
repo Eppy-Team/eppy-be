@@ -106,6 +106,7 @@ model KnowledgeArticle {
   title           String
   content         String?
   fileUrl         String?         @map("file_url")
+  fileKey         String?         @map("file_key")
   category        String
   embeddingStatus EmbeddingStatus @default(PENDING) @map("embedding_status")
   embedding       Unsupported("vector(1536)")?
