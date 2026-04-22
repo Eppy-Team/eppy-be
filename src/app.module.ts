@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from './auth/auth.module';
 import { AiModule } from './ai/ai.module';
 import { KnowledgeModule } from './knowledge/knowledge.module';
+import { ConversationModule } from './conversation/conversation.module';
 import { ConfigModule } from '@nestjs/config';
 import * as Joi from 'joi';
 
@@ -32,6 +33,7 @@ import * as Joi from 'joi';
     AuthModule,
     AiModule,
     KnowledgeModule,
+    ConversationModule,
   ],
 })
 export class AppModule {}
