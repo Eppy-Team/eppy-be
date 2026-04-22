@@ -27,37 +27,18 @@ import { CurrentUser } from '../common/decorators/get-user.decorator';
 import { UserRole } from '@prisma/client';
 
 /**
- * Multer Configuration for Knowledge Article File Upload
- *
- * Configures file upload handling untuk Knowledge API endpoints.
- *
- * Configuration:
- * - Storage: In-memory storage (buffer di-load ke memory, bukan disk)
- * - File Filter: Hanya accept PDF files (application/pdf)
- * - File Size Limit: Maximum 10MB per file
- * - Validation: MIME type checking di fileFilter callback
- *
- * File Flow:
- * 1. Client uploads PDF file via multipart/form-data
- * 2. Multer validates MIME type dan file size
- * 3. File buffer disimpan di memory storage
- * 4. File di-pass ke KnowledgeService untuk S3 upload
- *
- * @throws BadRequestException - Jika file bukan PDF atau size exceeds limit
- *
- * @remarks
- * In-memory storage digunakan untuk non-blocking S3 operations.
- * Tidak cocok untuk file upload di-disk. Untuk production dengan
- * ukuran file besar, pertimbangkan streaming langsung ke S3.
+ * Multer Configuration for Knowledge Article Uploads
+ * * Configures the file upload pipeline for PDF documents.
+ * Uses in-memory storage for efficient non-blocking S3 uploads.
+ * * Validation:
+ * - MIME Type: Strictly application/pdf.
+ * - File Size: Max 10MB.
  */
 const multerOptions = {
   storage: memoryStorage(),
   fileFilter: (_req: any, file: Express.Multer.File, cb: any) => {
     if (file.mimetype !== 'application/pdf') {
-      return cb(
-        new BadRequestException('Hanya file PDF yang diizinkan'),
-        false,
-      );
+      return cb(new BadRequestException('Only PDF files are allowed'), false);
     }
     cb(null, true);
   },
@@ -68,34 +49,11 @@ const multerOptions = {
 
 /**
  * Knowledge Controller
- *
- * REST API controller untuk knowledge base management.
- * Menangani HTTP requests untuk CRUD operations pada knowledge articles.
- *
- * Features:
- * - GET /knowledge - Retrieve paginated articles list
- * - GET /knowledge/:id - Retrieve single article details
- * - POST /knowledge - Create new article dengan PDF upload
- * - PATCH /knowledge/:id - Update article metadata
- * - DELETE /knowledge/:id - Delete article dan associated resources
- *
- * Security:
- * - Requires JwtAuthGuard untuk authentication (valid JWT token)
- * - Requires RolesGuard untuk authorization (ADMIN role only)
- * - All endpoints restricted ke admin users
- *
- * File Upload:
- * - POST endpoint menggunakan FileInterceptor untuk multipart/form-data handling
- * - Multer configuration di-apply untuk validation (PDF only, max 10MB)
- *
- * Dependencies:
- * - KnowledgeService: Business logic layer
- * - JWT Authentication Guard: Token validation
- * - Role-Based Access Control: Admin authorization
- *
- * @see KnowledgeService untuk business logic implementation
- * @see JwtAuthGuard untuk authentication details
- * @see RolesGuard untuk authorization details
+ * * Management API for the system's knowledge base. 
+ * Facilitates CRUD operations with integrated PDF processing and AI embedding orchestration.
+ * * Security:
+ * - Requires Admin role for all management operations.
+ * - Enforces JWT authentication.
  */
 @Controller('knowledge')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -104,62 +62,22 @@ export class KnowledgeController {
   constructor(private readonly knowledgeService: KnowledgeService) {}
 
   /**
-   * GET /knowledge - Retrieve paginated list of knowledge articles
-   *
-   * Fetches articles dari database dengan support pagination.
-   * Results di-sort by creation date (newest first).
-   *
-   * Query Parameters:
-   * @param page - Page number untuk pagination (default: 1, minimum: 1)
-   * @param limit - Items per page (default: 10, recommend: 10-50)
-   *
-   * Response:
-   * - message: Success message
-   * - data: Array of article objects
-   * - meta: Pagination metadata (total, page, lastPage, limit)
-   *
-   * HTTP Status: 200 OK
-   *
-   * @example
-   * GET /knowledge?page=1&limit=10
-   * GET /knowledge (uses defaults)
-   *
-   * @remarks
-   * Pagination calculation: skip = (page - 1) * limit
-   * LastPage dihitung dari: ceil(total / limit)
+   * Retrieve a paginated list of knowledge articles.
+   * * @param page - Current page number (defaults to 1).
+   * @param limit - Records per page (defaults to 10).
+   * @returns Paginated articles sorted by creation date (descending).
    */
   @Get()
   async findAll(@Query('page') page: string, @Query('limit') limit: string) {
     const pageNumber = parseInt(page) || 1;
     const limitNumber = parseInt(limit) || 10;
-
     return this.knowledgeService.findAll(pageNumber, limitNumber);
   }
 
   /**
-   * GET /knowledge/:id - Retrieve single article with complete details
-   *
-   * Fetches single article by ID dengan semua informasi lengkap termasuk
-   * content, embedding status, dan author information.
-   *
-   * Path Parameter:
-   * @param id - Article UUID (validated oleh ParseUUIDPipe)
-   *
-   * Response:
-   * - message: Success message
-   * - data: Complete article object dengan author info
-   *
-   * HTTP Status: 200 OK
-   * HTTP Status: 404 Not Found - Jika article tidak ditemukan
-   *
-   * @example
-   * GET /knowledge/550e8400-e29b-41d4-a716-446655440000
-   *
-   * @throws NotFoundException - Article dengan ID tidak ada di database
-   *
-   * @remarks
-   * ID parameter otomatis di-validate sebagai valid UUID format.
-   * Invalid UUID akan reject dengan 400 Bad Request sebelum ke service.
+   * Retrieve comprehensive details of a single knowledge article.
+   * * @param id - Article UUID.
+   * @throws {NotFoundException} If the article does not exist.
    */
   @Get(':id')
   async findById(@Param('id', ParseUUIDPipe) id: string) {
@@ -167,42 +85,15 @@ export class KnowledgeController {
   }
 
   /**
-   * POST /knowledge - Create new knowledge article dengan file upload
-   *
-   * Creates new article record dan uploads associated PDF file ke S3.
-   * Embedding processing di-trigger secara asynchronous setelah response.
-   *
-   * Request:
-   * Content-Type: multipart/form-data
-   *
-   * Form Fields:
-   * @param dto - CreateKnowledgeDto (title, category) dalam form field
-   * @param file - PDF file dengan field name 'file' (required, max 10MB)
-   * @param userId - Extracted dari JWT token automatically (@CurrentUser decorator)
-   *
-   * Response:
-   * - message: Success message dengan processing status
-   * - data: Created article object dengan metadata
-   *
-   * HTTP Status: 201 Created
-   * HTTP Status: 400 Bad Request - File missing atau invalid format
-   *
-   * @example
-   * POST /knowledge
-   * Content-Type: multipart/form-data
-   * 
-   * form fields:
-   * - title: "Best Practices in NestJS"
-   * - category: "Backend Development"
-   * - file: (PDF file)
-   *
-   * @throws BadRequestException - File tidak diunggah atau bukan PDF
-   *
-   * @remarks
-   * File validation dilakukan di Multer middleware (MIME type, size).
-   * Embedding processing berjalan di background tanpa memblock response.
-   * Status embedding awal: PENDING, akan berubah ke DONE atau FAILED.
-   * userId diambil otomatis dari JWT token (decoded by CurrentUser decorator).
+   * Create a new knowledge article with file upload.
+   * * Orchestrates the following flow:
+   * 1. Validates multipart/form-data and PDF integrity.
+   * 2. Uploads file to S3 and creates database record.
+   * 3. Triggers background asynchronous AI embedding.
+   * * @param dto - Article metadata (title, category).
+   * @param file - PDF document (multipart/form-data).
+   * @param userId - Admin user ID injected from JWT.
+   * @throws {BadRequestException} If file is missing or invalid.
    */
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -212,45 +103,17 @@ export class KnowledgeController {
     @UploadedFile() file: Express.Multer.File,
     @CurrentUser('id') userId: string,
   ) {
-    if (!file) {
-      throw new BadRequestException('File PDF wajib diunggah');
-    }
+    if (!file) throw new BadRequestException('PDF file is required');
     return this.knowledgeService.create(dto, file, userId);
   }
 
   /**
-   * PATCH /knowledge/:id - Update existing article metadata
-   *
-   * Updates article title dan/atau category. Update akan trigger
-   * re-embedding process untuk generate ulang embeddings dengan context baru.
-   *
-   * Path Parameter:
-   * @param id - Article UUID (validated oleh ParseUUIDPipe)
-   *
-   * Request Body:
-   * @param dto - UpdateKnowledgeDto dengan optional title dan category
-   *             (minimal satu field harus ada)
-   *
-   * Response:
-   * - message: Success message
-   * - data: Updated article object
-   *
-   * HTTP Status: 200 OK
-   * HTTP Status: 404 Not Found - Article tidak ditemukan
-   *
-   * @example
-   * PATCH /knowledge/550e8400-e29b-41d4-a716-446655440000
-   * Body: {
-   *   "title": "Updated Article Title",
-   *   "category": "New Category"
-   * }
-   *
-   * @throws NotFoundException - Article dengan ID tidak ada
-   *
-   * @remarks
-   * Embedding status otomatis di-set ke PENDING untuk trigger re-embedding.
-   * Re-embedding berjalan asynchronously di background.
-   * File (PDF) tidak dapat diupdate melalui PATCH endpoint.
+   * Update knowledge article metadata.
+   * * Updating title or category will trigger a re-embedding process 
+   * to ensure AI context remains accurate.
+   * * @param id - Article UUID.
+   * @param dto - Partial metadata updates.
+   * @remarks Re-embedding runs asynchronously in the background.
    */
   @Patch(':id')
   async update(
@@ -261,33 +124,12 @@ export class KnowledgeController {
   }
 
   /**
-   * DELETE /knowledge/:id - Delete article dan associated resources
-   *
-   * Performs cascade deletion:
-   * 1. Delete article record dari database (synchronous)
-   * 2. Delete PDF file dari S3 storage (asynchronous, fire-and-forget)
-   * 3. Delete embeddings dari AI service (asynchronous, fire-and-forget)
-   *
-   * Path Parameter:
-   * @param id - Article UUID (validated oleh ParseUUIDPipe)
-   *
-   * Response:
-   * - 204 No Content (empty response body)
-   *
-   * HTTP Status: 204 No Content - Success, tidak ada response body
-   * HTTP Status: 404 Not Found - Article tidak ditemukan
-   *
-   * @example
-   * DELETE /knowledge/550e8400-e29b-41d4-a716-446655440000
-   * Response: 204 No Content
-   *
-   * @throws NotFoundException - Article dengan ID tidak ada
-   *
-   * @remarks
-   * 204 No Content: Standard REST convention untuk successful DELETE.
-   * File dan embedding deletion async - errors tidak mempengaruhi response.
-   * Asynchronous deletion di-log tapi tidak di-throw ke client.
-   * Database deletion synchronous - dijalankan sebelum response dikirim.
+   * Delete an article and its associated cloud resources.
+   * * Performs a synchronous database deletion followed by asynchronous 
+   * cleanup of S3 files and AI vector embeddings.
+   * * @param id - Article UUID.
+   * @returns 204 No Content on success.
+   * @remarks File and embedding deletions are 'fire-and-forget' background tasks.
    */
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)

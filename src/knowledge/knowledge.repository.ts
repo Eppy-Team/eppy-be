@@ -5,28 +5,34 @@ import { Prisma, EmbeddingStatus } from '@prisma/client';
 /**
  * Knowledge Repository
  *
- * Data Access Layer for the `knowledge_article` table in the database.
- * Handles all database interactions using Prisma ORM.
+ * Data Access Layer for the `knowledge_article` entity.
+ * Encapsulates all direct database interactions using Prisma ORM, providing
+ * optimized queries and consistent state mutations.
  *
  * Responsibilities:
- * - Query operations (findAll, findById, findMany)
- * - Write operations (create, update, delete)
- * - State mutations (updateEmbeddingStatus)
+ * - Paginated data retrieval with total count aggregation.
+ * - Resource creation with initial state management.
+ * - Targeted metadata and status updates.
+ * - Hard deletion of article records.
+ *
+ * Dependencies:
+ * - PrismaService: Core database engine client.
  */
 @Injectable()
 export class KnowledgeRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Retrieve a paginated list of articles.
+   * Retrieve a paginated list of knowledge articles.
+   * * Executes a concurrent query for both data and total record count to optimize
+   * pagination metadata generation in the service layer.
    *
-   * @param params.skip - Offset for pagination.
-   * @param params.take - Limit on the number of records to retrieve.
-   * @returns An object containing the articles array and the total count.
+   * @param params - Pagination parameters (skip, take).
+   * @returns An object containing the article array and the global count.
    *
    * @remarks
-   * Results are sorted by `createdAt` in descending order (newest first).
-   * Uses minimal field selection to optimize query performance.
+   * - Performance: Uses explicit field selection to reduce database I/O.
+   * - Ordering: Sorted by `createdAt` in descending order by default.
    */
   async findAll(params: { skip?: number; take?: number }) {
     const { skip, take } = params;
@@ -56,13 +62,14 @@ export class KnowledgeRepository {
   }
 
   /**
-   * Retrieve a single article with comprehensive details.
+   * Retrieve a single knowledge article by its unique identifier.
    *
-   * @param id - The article's UUID.
-   * @returns The full article object or null if not found.
+   * @param id - The article UUID.
+   * @returns The article object with full metadata or null if not found.
    *
    * @remarks
-   * Includes the `fileKey` field, which is required for storage deletion operations.
+   * Includes the `fileKey` field, which is essential for external resource 
+   * cleanup (S3) in the service layer.
    */
   async findById(id: string) {
     return this.prisma.knowledgeArticle.findUnique({
@@ -85,14 +92,14 @@ export class KnowledgeRepository {
   }
 
   /**
-   * Create a new knowledge article record.
+   * Persist a new knowledge article record.
    *
-   * @param data - Article data including title, category, fileUrl, fileKey, and createdBy.
-   * @returns The created article object with selected fields.
+   * @param data - Payload for creating an article, including ownership and file references.
+   * @returns The newly created article record with essential fields.
    *
    * @remarks
-   * Embedding status is automatically set to PENDING upon creation.
-   * Returns only selected fields (excludes sensitive or unnecessary internal data).
+   * - Default State: `embeddingStatus` is initialized to `PENDING`.
+   * - Audit: Maps `createdBy` to the authenticated admin user.
    */
   async create(data: {
     title: string;
@@ -122,15 +129,11 @@ export class KnowledgeRepository {
   }
 
   /**
-   * Update an existing knowledge article.
+   * Update metadata for an existing knowledge article.
    *
-   * @param id - The article's UUID.
-   * @param data - Prisma update input containing partial article fields.
-   * @returns The updated article object with selected fields.
-   *
-   * @remarks
-   * Supports flexible updates via Prisma. The Service layer is responsible
-   * for validation and overarching business logic.
+   * @param id - The article UUID.
+   * @param data - Partial update input following Prisma's schema.
+   * @returns The updated article record.
    */
   async update(id: string, data: Prisma.KnowledgeArticleUpdateInput) {
     return this.prisma.knowledgeArticle.update({
@@ -148,14 +151,15 @@ export class KnowledgeRepository {
   }
 
   /**
-   * Update the embedding status of an article.
+   * Atomic update for the article's embedding lifecycle status.
    *
-   * @param id - The article's UUID.
-   * @param status - The new embedding status (PENDING, PROCESSING, DONE, FAILED).
-   * @returns The updated article record.
+   * @param id - The article UUID.
+   * @param status - The target state (PENDING, PROCESSING, DONE, FAILED).
+   * @returns The updated record reflecting the new status.
    *
    * @remarks
-   * A dedicated method for the state management of the background embedding process.
+   * This dedicated method is used by the AI orchestration service to 
+   * track background processing progress.
    */
   async updateEmbeddingStatus(id: string, status: EmbeddingStatus) {
     return this.prisma.knowledgeArticle.update({
@@ -165,14 +169,14 @@ export class KnowledgeRepository {
   }
 
   /**
-   * Delete an article by its unique identifier.
+   * Permanently delete an article record from the database.
    *
-   * @param id - The article's UUID.
-   * @returns The deleted article object.
+   * @param id - The article UUID.
+   * @returns The record as it existed before deletion.
    *
    * @remarks
-   * Performs a hard delete from the database. Associated files and embeddings
-   * must be handled separately by the service layer.
+   * This is a hard delete operation. The service layer must ensure that
+   * associated storage (S3) and vector data are also cleaned up.
    */
   async delete(id: string) {
     return this.prisma.knowledgeArticle.delete({
