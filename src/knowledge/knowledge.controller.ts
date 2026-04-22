@@ -5,6 +5,7 @@ import {
   Patch,
   Delete,
   Param,
+  Query,
   Body,
   UseGuards,
   UseInterceptors,
@@ -27,7 +28,10 @@ const multerOptions = {
   storage: memoryStorage(),
   fileFilter: (_req: any, file: Express.Multer.File, cb: any) => {
     if (file.mimetype !== 'application/pdf') {
-      return cb(new BadRequestException('Hanya file PDF yang diizinkan'), false);
+      return cb(
+        new BadRequestException('Hanya file PDF yang diizinkan'),
+        false,
+      );
     }
     cb(null, true);
   },
@@ -38,13 +42,16 @@ const multerOptions = {
 
 @Controller('knowledge')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.ADMIN) 
+@Roles(UserRole.ADMIN)
 export class KnowledgeController {
   constructor(private readonly knowledgeService: KnowledgeService) {}
 
   @Get()
-  async findAll() {
-    return this.knowledgeService.findAll();
+  async findAll(@Query('page') page: string, @Query('limit') limit: string) {
+    const pageNumber = parseInt(page) || 1;
+    const limitNumber = parseInt(limit) || 10;
+
+    return this.knowledgeService.findAll(pageNumber, limitNumber);
   }
 
   @Get(':id')

@@ -6,22 +6,31 @@ import { Prisma, EmbeddingStatus } from '@prisma/client';
 export class KnowledgeRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll() {
-    return this.prisma.knowledgeArticle.findMany({
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        title: true,
-        category: true,
-        fileUrl: true,
-        embeddingStatus: true,
-        createdAt: true,
-        updatedAt: true,
-        author: {
-          select: { id: true, name: true },
+  async findAll(params: { skip?: number; take?: number }) {
+    const { skip, take } = params;
+
+    const [articles, total] = await Promise.all([
+      this.prisma.knowledgeArticle.findMany({
+        skip,
+        take,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          title: true,
+          category: true,
+          fileUrl: true,
+          embeddingStatus: true,
+          createdAt: true,
+          updatedAt: true,
+          author: {
+            select: { id: true, name: true },
+          },
         },
-      },
-    });
+      }),
+      this.prisma.knowledgeArticle.count(),
+    ]);
+
+    return { articles, total };
   }
 
   async findById(id: string) {

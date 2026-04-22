@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { EmbeddingStatus } from '@prisma/client';
 import { KnowledgeRepository } from './knowledge.repository';
 import { AiService } from '../ai/ai.service';
@@ -20,11 +16,23 @@ export class KnowledgeService {
     private readonly storageService: StorageService,
   ) {}
 
-  async findAll() {
-    const articles = await this.knowledgeRepository.findAll();
+  async findAll(page: number = 1, limit: number = 10) {
+    const skip = (page - 1) * limit;
+
+    const { articles, total } = await this.knowledgeRepository.findAll({
+      skip,
+      take: limit,
+    });
+
     return {
       message: 'Knowledge articles retrieved successfully',
       data: articles,
+      meta: {
+        total,
+        page,
+        lastPage: Math.ceil(total / limit),
+        limit,
+      },
     };
   }
 
@@ -45,8 +53,8 @@ export class KnowledgeService {
         createdAt: article.createdAt,
         updatedAt: article.updatedAt,
         author: {
-            id: article.author.id,
-            name: article.author.name
+          id: article.author.id,
+          name: article.author.name,
         },
       },
     };
@@ -57,7 +65,8 @@ export class KnowledgeService {
     file: Express.Multer.File,
     userId: string,
   ) {
-    const { url: fileUrl, key: fileKey } = await this.storageService.upload(file);
+    const { url: fileUrl, key: fileKey } =
+      await this.storageService.upload(file);
 
     const article = await this.knowledgeRepository.create({
       title: dto.title,
@@ -67,7 +76,13 @@ export class KnowledgeService {
       createdBy: userId,
     });
 
-    this.triggerEmbed(article.id, dto.title, dto.category, file.buffer, file.originalname);
+    this.triggerEmbed(
+      article.id,
+      dto.title,
+      dto.category,
+      file.buffer,
+      file.originalname,
+    );
 
     return {
       message: 'Knowledge article created. Embedding sedang diproses.',
@@ -106,7 +121,10 @@ export class KnowledgeService {
       this.storageService
         .delete(existing.fileKey)
         .catch((err) =>
-          this.logger.error(`[delete] gagal hapus file storage ${id}`, err?.message),
+          this.logger.error(
+            `[delete] gagal hapus file storage ${id}`,
+            err?.message,
+          ),
         );
     }
 
@@ -132,7 +150,9 @@ export class KnowledgeService {
   ) {
     this.knowledgeRepository
       .updateEmbeddingStatus(articleId, EmbeddingStatus.PROCESSING)
-      .then(() => this.aiService.embed(articleId, title, category, buffer, fileName))
+      .then(() =>
+        this.aiService.embed(articleId, title, category, buffer, fileName),
+      )
       .then(() => {
         this.logger.log(`[embed] success for ${articleId}`);
         return this.knowledgeRepository.updateEmbeddingStatus(
