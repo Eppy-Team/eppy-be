@@ -98,8 +98,7 @@ export class KnowledgeService {
 
     const updated = await this.knowledgeRepository.update(id, {
       ...(dto.title && { title: dto.title }),
-      ...(dto.category && { category: dto.category }),
-      embeddingStatus: EmbeddingStatus.PENDING,
+      ...(dto.category && { category: dto.category })
     });
 
     return {
