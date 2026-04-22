@@ -12,6 +12,8 @@ import {
   UploadedFile,
   BadRequestException,
   ParseUUIDPipe,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
@@ -60,6 +62,7 @@ export class KnowledgeController {
   }
 
   @Post()
+  @HttpCode(HttpStatus.CREATED)
   @UseInterceptors(FileInterceptor('file', multerOptions))
   async create(
     @Body() dto: CreateKnowledgeDto,
@@ -81,6 +84,7 @@ export class KnowledgeController {
   }
 
   @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
   async delete(@Param('id', ParseUUIDPipe) id: string) {
     return this.knowledgeService.delete(id);
   }

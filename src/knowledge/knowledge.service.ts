@@ -25,7 +25,7 @@ export class KnowledgeService {
     });
 
     return {
-      message: 'Knowledge articles retrieved successfully',
+      message: 'Articles retrieved',
       data: articles,
       meta: {
         total,
@@ -42,7 +42,7 @@ export class KnowledgeService {
       throw new NotFoundException('Knowledge article not found');
     }
     return {
-      message: 'Knowledge article retrieved successfully',
+      message: 'Article retrieved',
       data: {
         id: article.id,
         title: article.title,
@@ -85,7 +85,7 @@ export class KnowledgeService {
     );
 
     return {
-      message: 'Knowledge article created. Embedding sedang diproses.',
+      message: 'Article created. Processing embeddings.',
       data: article,
     };
   }
@@ -103,7 +103,7 @@ export class KnowledgeService {
     });
 
     return {
-      message: 'Knowledge article updated successfully.',
+      message: 'Article updated',
       data: updated,
     };
   }
@@ -136,7 +136,7 @@ export class KnowledgeService {
         this.logger.error(`[delete] gagal hapus embedding ${id}`, err?.message),
       );
 
-    return { message: 'Knowledge article deleted successfully' };
+    return { message: 'Article deleted' };
   }
 
   // ─── Private Helper ───────────────────────────────────────────────────────
