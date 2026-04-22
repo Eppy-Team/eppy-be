@@ -35,7 +35,20 @@ export class KnowledgeService {
     }
     return {
       message: 'Knowledge article retrieved successfully',
-      data: article,
+      data: {
+        id: article.id,
+        title: article.title,
+        content: article.content,
+        category: article.category,
+        fileUrl: article.fileUrl,
+        embeddingStatus: article.embeddingStatus,
+        createdAt: article.createdAt,
+        updatedAt: article.updatedAt,
+        author: {
+            id: article.author.id,
+            name: article.author.name
+        },
+      },
     };
   }
 
