@@ -6,6 +6,20 @@ import { StorageService } from '../storage/storage.service';
 import { CreateKnowledgeDto } from './dto/create-knowledge.dto';
 import { UpdateKnowledgeDto } from './dto/update-knowledge.dto';
 
+/**
+ * Knowledge Service
+ *
+ * Business logic layer for knowledge base management.
+ * Handles CRUD operations, S3 file uploads, and orchestration with the AI service
+ * for automatic embedding/vectorization of articles.
+ *
+ * Embedding processing is performed asynchronously to ensure non-blocking operations.
+ *
+ * Dependencies:
+ * - KnowledgeRepository: Database operations.
+ * - AiService: Embedding generation and management.
+ * - StorageService: S3 file storage operations.
+ */
 @Injectable()
 export class KnowledgeService {
   private readonly logger = new Logger(KnowledgeService.name);
@@ -16,6 +30,13 @@ export class KnowledgeService {
     private readonly storageService: StorageService,
   ) {}
 
+  /**
+   * Retrieve a paginated list of knowledge articles.
+   *
+   * @param page - Page number (1-indexed, defaults to 1).
+   * @param limit - Number of items per page (defaults to 10).
+   * @returns Articles with pagination metadata (total, page, lastPage, limit).
+   */
   async findAll(page: number = 1, limit: number = 10) {
     const skip = (page - 1) * limit;
 
@@ -36,6 +57,13 @@ export class KnowledgeService {
     };
   }
 
+  /**
+   * Retrieve a single knowledge article by its ID with full details.
+   *
+   * @param id - The article's UUID.
+   * @returns A complete article object including author information.
+   * @throws {NotFoundException} If the article is not found.
+   */
   async findById(id: string) {
     const article = await this.knowledgeRepository.findById(id);
     if (!article) {
@@ -60,6 +88,23 @@ export class KnowledgeService {
     };
   }
 
+  /**
+   * Create a new knowledge article with a file upload.
+   *
+   * Flow:
+   * 1. Upload PDF file to S3 storage.
+   * 2. Create article record in the database with PENDING status.
+   * 3. Trigger asynchronous embedding processing.
+   *
+   * @param dto - CreateKnowledgeDto containing title and category.
+   * @param file - Multer file object (PDF).
+   * @param userId - The creator's user ID from the JWT token.
+   * @returns The created article with an initial embedding status of PENDING.
+   *
+   * @remarks
+   * Embedding processing runs asynchronously without blocking the response.
+   * The status will transition to DONE or FAILED based on the processing result.
+   */
   async create(
     dto: CreateKnowledgeDto,
     file: Express.Multer.File,
@@ -90,6 +135,20 @@ export class KnowledgeService {
     };
   }
 
+  /**
+   * Update an existing knowledge article.
+   *
+   * Only the title and category are updatable.
+   * Any update will trigger a re-embedding process with a PENDING status.
+   *
+   * @param id - The article's UUID.
+   * @param dto - UpdateKnowledgeDto containing optional title and/or category.
+   * @returns The updated article object.
+   * @throws {NotFoundException} If the article is not found.
+   *
+   * @remarks
+   * Embedding processing is triggered asynchronously after the database update.
+   */
   async update(id: string, dto: UpdateKnowledgeDto) {
     const existing = await this.knowledgeRepository.findById(id);
     if (!existing) {
@@ -98,7 +157,7 @@ export class KnowledgeService {
 
     const updated = await this.knowledgeRepository.update(id, {
       ...(dto.title && { title: dto.title }),
-      ...(dto.category && { category: dto.category })
+      ...(dto.category && { category: dto.category }),
     });
 
     return {
@@ -107,6 +166,22 @@ export class KnowledgeService {
     };
   }
 
+  /**
+   * Delete a knowledge article.
+   *
+   * Flow:
+   * 1. Delete the article from the database.
+   * 2. Delete the associated file from S3 (async).
+   * 3. Delete the associated embedding from the AI service (async).
+   *
+   * @param id - The article's UUID.
+   * @returns A success message.
+   * @throws {NotFoundException} If the article is not found.
+   *
+   * @remarks
+   * File and embedding deletions are performed asynchronously to prevent response blocking.
+   * Errors in async deletion tasks are logged but do not affect the main response.
+   */
   async delete(id: string) {
     const existing = await this.knowledgeRepository.findById(id);
     if (!existing) {
@@ -115,7 +190,6 @@ export class KnowledgeService {
 
     await this.knowledgeRepository.delete(id);
 
-    // Hapus file dari storage — async
     if (existing.fileKey) {
       this.storageService
         .delete(existing.fileKey)
@@ -127,7 +201,6 @@ export class KnowledgeService {
         );
     }
 
-    // Hapus embedding di AI Service — async
     this.aiService
       .deleteEmbed(id)
       .then(() => this.logger.log(`[delete] embedding deleted for ${id}`))
@@ -138,8 +211,24 @@ export class KnowledgeService {
     return { message: 'Article deleted' };
   }
 
-  // ─── Private Helper ───────────────────────────────────────────────────────
-
+  /**
+   * Private helper: Trigger the asynchronous embedding process.
+   *
+   * Orchestrates embedding generation with state management:
+   * 1. Update status to PROCESSING.
+   * 2. Generate embeddings via the AI service.
+   * 3. Set status to DONE on success or FAILED on error.
+   *
+   * @param articleId - Target article ID for embedding.
+   * @param title - Article title (for context).
+   * @param category - Article category (for context).
+   * @param buffer - File buffer content.
+   * @param fileName - Original file name.
+   *
+   * @remarks
+   * Fully asynchronous — errors are logged internally and not re-thrown.
+   * Designed specifically for non-blocking background processing.
+   */
   private triggerEmbed(
     articleId: string,
     title: string,
