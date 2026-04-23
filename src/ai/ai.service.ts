@@ -20,6 +20,17 @@ import {
 
 @Injectable()
 export class AiService {
+  /**
+   * AI Service
+   * * Orchestration layer for communication with the external AI microservice.
+   * Manages RAG-based chat inference, document vectorization, and vector cleanup.
+   *
+   * @remarks
+   * Resiliency Features:
+   * - Structured error mapping from AI domain to HTTP domain.
+   * - Integrated Development Mocking for offline local testing.
+   * - Configurable timeouts for long-running embedding tasks.
+   */
   private readonly logger = new Logger(AiService.name);
   private readonly client: AxiosInstance;
   private readonly useMock: boolean;
@@ -42,8 +53,15 @@ export class AiService {
     );
   }
 
-  // ─── POST /chat ───────────────────────────────────────────────────────────
-
+  /**
+   * Execute Retrieval-Augmented Generation (RAG) chat inference.
+   * * Sends user queries and history to the AI engine to generate
+   * context-aware answers based on the indexed knowledge base.
+   *
+   * @param payload - Request data including conversation context and history.
+   * @returns Generated answer with confidence scores and source citations.
+   * @throws {HttpException} Mapped AI service errors (e.g., Rate limits, No context).
+   */
   async chat(payload: ChatRequestDto): Promise<ChatResponseDto> {
     if (this.useMock) {
       return this.mockChatResponse();
@@ -63,10 +81,21 @@ export class AiService {
     }
   }
 
-  // ─── POST /embed ──────────────────────────────────────────────────────────
-  // Dipanggil secara async/fire-and-forget dari KnowledgeService.
-  // Jangan await di luar kecuali perlu hasilnya.
-
+  /**
+   * Generate vector embeddings for a knowledge article.
+   * * Processes PDF documents into high-dimensional vectors (e.g., 1536 dims)
+   * and stores them in the vector database for semantic search.
+   *
+   * @param articleId - Target article UUID.
+   * @param title - Contextual title for the embedding metadata.
+   * @param category - Domain category for search filtering.
+   * @param fileBuffer - Raw PDF data.
+   * @param originalFileName - Filename for reference.
+   * @returns Embedding metadata and success status.
+   *
+   * @remarks
+   * This operation is computationally intensive and has a 60-second timeout.
+   */
   async embed(
     articleId: string,
     title: string,
@@ -107,8 +136,11 @@ export class AiService {
     }
   }
 
-  // ─── DELETE /embed/:article_id ────────────────────────────────────────────
-
+  /**
+   * Remove vector embeddings for a specific article.
+   * * Ensures that deleted articles are no longer considered in
+   * future similarity searches during the RAG process.
+   */
   async deleteEmbed(articleId: string): Promise<DeleteEmbedResponseDto> {
     if (this.useMock) {
       return { success: true, article_id: articleId };
@@ -129,8 +161,11 @@ export class AiService {
     }
   }
 
-  // ─── GET /health ──────────────────────────────────────────────────────────
-
+  /**
+   * Verify the availability and health of the AI microservice.
+   * * Used for monitoring and startup verification.
+   * @throws {ServiceUnavailableException} If the AI service is unreachable.
+   */
   async healthCheck(): Promise<HealthCheckResponseDto> {
     if (this.useMock) {
       return { status: 'ok', model: 'mock', knowledge_count: 0 };
@@ -145,8 +180,10 @@ export class AiService {
     }
   }
 
-  // ─── Error Handler ────────────────────────────────────────────────────────
-
+  /**
+   * Internal Error Orchestration.
+   * * Maps proprietary AI error codes to standard HTTP exceptions.
+   */
   private handleAiError(error: unknown, context: string): HttpException {
     if (axios.isAxiosError(error)) {
       const axiosError = error as AxiosError<{
@@ -154,7 +191,6 @@ export class AiService {
         message: string;
       }>;
 
-      // AI Service merespons dengan error terstruktur
       if (axiosError.response) {
         const { status, data } = axiosError.response;
         const errorCode = data?.error_code;
@@ -191,7 +227,6 @@ export class AiService {
         }
       }
 
-      // AI Service tidak merespons sama sekali (timeout / down)
       if (
         axiosError.code === 'ECONNABORTED' ||
         axiosError.code === 'ECONNREFUSED'
@@ -210,9 +245,9 @@ export class AiService {
     );
   }
 
-  // ─── Mock Responses ───────────────────────────────────────────────────────
-  // Dipakai saat AI_SERVICE_MOCK=true di .env (development/testing)
-
+  /**
+   * Development Mock: Generates a placeholder chat response.
+   */
   private mockChatResponse(): ChatResponseDto {
     this.logger.debug('[chat] returning mock response');
     return {
@@ -223,6 +258,9 @@ export class AiService {
     };
   }
 
+  /**
+   * Development Mock: Generates placeholder embedding metadata.
+   */
   private mockEmbedResponse(articleId: string): EmbedResponseDto {
     this.logger.debug(`[embed] returning mock response for ${articleId}`);
     return {
