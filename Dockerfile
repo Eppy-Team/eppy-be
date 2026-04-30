@@ -8,8 +8,6 @@ RUN npm install
 
 COPY . .
 
-ENV DATABASE_URL="postgresql://johndoe:randompassword@localhost:5432/mydb?schema=public"
-
 RUN npx prisma generate
 RUN npm run build
 
