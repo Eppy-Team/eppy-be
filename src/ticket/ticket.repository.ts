@@ -6,20 +6,27 @@ import { TicketStatus } from '@prisma/client';
 export class TicketRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  // ─── User ─────────────────────────────────────────────────────────────────
+  async findAllByUserId(userId: string, params: { skip?: number; take?: number }) {
+    const { skip, take } = params;
 
-  async findAllByUserId(userId: string) {
-    return this.prisma.ticket.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        title: true,
-        status: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
+    const [tickets, total] = await Promise.all([
+      this.prisma.ticket.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take,
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      }),
+      this.prisma.ticket.count({ where: { userId } }),
+    ]);
+
+    return { tickets, total };
   }
 
   async findByIdAndUserId(id: string, userId: string) {
@@ -68,22 +75,29 @@ export class TicketRepository {
     });
   }
 
-  // ─── Admin ────────────────────────────────────────────────────────────────
+  async findAll(params: { skip?: number; take?: number }) {
+    const { skip, take } = params;
 
-  async findAll() {
-    return this.prisma.ticket.findMany({
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        title: true,
-        status: true,
-        createdAt: true,
-        updatedAt: true,
-        user: {
-          select: { id: true, name: true, email: true },
+    const [tickets, total] = await Promise.all([
+      this.prisma.ticket.findMany({
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take,
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+          user: {
+            select: { id: true, name: true, email: true },
+          },
         },
-      },
-    });
+      }),
+      this.prisma.ticket.count(),
+    ]);
+
+    return { tickets, total };
   }
 
   async findById(id: string) {

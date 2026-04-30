@@ -16,13 +16,23 @@ export class TicketService {
     private readonly prisma: PrismaService,
   ) {}
 
-  // ─── User ─────────────────────────────────────────────────────────────────
+  async findAllByUser(userId: string, page: number = 1, limit: number = 10) {
+    const skip = (page - 1) * limit;
 
-  async findAllByUser(userId: string) {
-    const tickets = await this.ticketRepository.findAllByUserId(userId);
+    const { tickets, total } = await this.ticketRepository.findAllByUserId(userId, {
+      skip,
+      take: limit,
+    });
+
     return {
       message: 'Tickets retrieved successfully',
       data: tickets,
+      meta: {
+        total,
+        page,
+        lastPage: Math.ceil(total / limit),
+        limit,
+      },
     };
   }
 
@@ -76,13 +86,23 @@ export class TicketService {
     };
   }
 
-  // ─── Admin ────────────────────────────────────────────────────────────────
+  async findAll(page: number = 1, limit: number = 10) {
+    const skip = (page - 1) * limit;
 
-  async findAll() {
-    const tickets = await this.ticketRepository.findAll();
+    const { tickets, total } = await this.ticketRepository.findAll({
+      skip,
+      take: limit,
+    });
+
     return {
       message: 'All tickets retrieved successfully',
       data: tickets,
+      meta: {
+        total,
+        page,
+        lastPage: Math.ceil(total / limit),
+        limit,
+      },
     };
   }
 

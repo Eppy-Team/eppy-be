@@ -5,6 +5,7 @@ import {
   Patch,
   Body,
   Param,
+  Query,
   UseGuards,
   ParseUUIDPipe,
 } from '@nestjs/common';
@@ -23,11 +24,15 @@ import { UserRole } from '@prisma/client';
 export class TicketController {
   constructor(private readonly ticketService: TicketService) {}
 
-  // ─── User endpoints ───────────────────────────────────────────────────────
-
   @Get()
-  async findAll(@CurrentUser('id') userId: string) {
-    return this.ticketService.findAllByUser(userId);
+  async findAll(
+    @CurrentUser('id') userId: string,
+    @Query('page') page: string,
+    @Query('limit') limit: string,
+  ) {
+    const pageNumber = parseInt(page) || 1;
+    const limitNumber = parseInt(limit) || 10;
+    return this.ticketService.findAllByUser(userId, pageNumber, limitNumber);
   }
 
   @Get(':id')
@@ -46,13 +51,16 @@ export class TicketController {
     return this.ticketService.create(dto, userId);
   }
 
-  // ─── Admin endpoints ──────────────────────────────────────────────────────
-
   @Get('admin/all')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
-  async findAllAdmin() {
-    return this.ticketService.findAll();
+  async findAllAdmin(
+    @Query('page') page: string,
+    @Query('limit') limit: string,
+  ) {
+    const pageNumber = parseInt(page) || 1;
+    const limitNumber = parseInt(limit) || 10;
+    return this.ticketService.findAll(pageNumber, limitNumber);
   }
 
   @Get('admin/:id')
