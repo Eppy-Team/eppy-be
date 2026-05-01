@@ -8,7 +8,7 @@ RUN npm install
 
 COPY . .
 
-RUN npx prisma generate
+RUN DATABASE_URL="postgresql://db:db@localhost:5432/db" npx prisma generate
 RUN npm run build
 
 # --- STAGE 2: Production ---
