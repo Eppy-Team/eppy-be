@@ -2,16 +2,12 @@
  * Embed Response DTO
  *
  * Response from AI service after successful PDF embedding generation.
- * Confirms that embeddings have been created and stored in vector database.
+ * Confirms the result of the vectorization process for a knowledge article.
  *
- * @property success - Operation success status
- * @property article_id - Article identifier (UUID)
- * @property embedding_dimensions - Vector dimension count (typically 1536 for Ada model)
+ * @property success - Whether embeddings were successfully created and stored in vector database
  */
 export interface EmbedResponseDto {
   success: boolean;
-  article_id: string;
-  embedding_dimensions: number;
 }
 
 /**

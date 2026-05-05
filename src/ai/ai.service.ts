@@ -83,54 +83,45 @@ export class AiService {
 
   /**
    * Generate vector embeddings for a knowledge article.
-   * * Processes PDF documents into high-dimensional vectors (e.g., 1536 dims)
-   * and stores them in the vector database for semantic search.
    *
-   * @param articleId - Target article UUID.
+   * Downloads PDF from S3 URL, processes it into high-dimensional vectors (e.g., 1536 dims),
+   * and stores embeddings in the vector database for semantic search and RAG retrieval.
+   *
+   * @param articleId - Target article UUID for embedding identification.
    * @param title - Contextual title for the embedding metadata.
-   * @param category - Domain category for search filtering.
-   * @param fileBuffer - Raw PDF data.
-   * @param originalFileName - Filename for reference.
-   * @returns Embedding metadata and success status.
+   * @param s3Url - Public S3 URL where the PDF file is stored. AI service will download and process.
+   * @returns Embedding operation result with success status.
    *
    * @remarks
    * This operation is computationally intensive and has a 60-second timeout.
+   * The AI service handles PDF download and processing; backend only provides S3 reference.
    */
   async embed(
     articleId: string,
     title: string,
-    category: string,
-    fileBuffer: Buffer,
-    originalFileName: string,
+    s3Url: string,
   ): Promise<EmbedResponseDto> {
     if (this.useMock) {
       return this.mockEmbedResponse(articleId);
     }
 
-    const form = new FormData();
-    form.append('article_id', articleId);
-    form.append('title', title);
-    form.append('category', category);
-    form.append('file', fileBuffer, {
-      filename: originalFileName,
-      contentType: 'application/pdf',
-    });
-
     try {
       const { data } = await this.client.post<EmbedResponseDto>(
         '/embed',
-        form,
         {
-          headers: form.getHeaders(),
-          timeout: 60000,
+          article_id: articleId,
+          title,
+          s3_url: s3Url,
         },
+        { timeout: 60000 },
       );
-      this.logger.log(`[embed] article_id=${articleId} done`);
+      this.logger.log(
+        `[embed] article_id=${articleId} done, success=${data.success}`,
+      );
       return data;
     } catch (error) {
       const errorMessage =
         error instanceof AxiosError ? error.message : (error as Error).message;
-
       this.logger.error(`[embed] article_id=${articleId} failed`, errorMessage);
       throw this.handleAiError(error, 'embed');
     }
@@ -259,14 +250,16 @@ export class AiService {
   }
 
   /**
-   * Development Mock: Generates placeholder embedding metadata.
+   * Development Mock: Generates a placeholder embedding response.
+   *
+   * Used during development/testing when AI_SERVICE_MOCK is enabled.
+   * Simulates a successful embedding operation without calling the external AI service.
+   *
+   * @param articleId - Article UUID for logging context.
+   * @returns Mock embedding response indicating success.
    */
   private mockEmbedResponse(articleId: string): EmbedResponseDto {
     this.logger.debug(`[embed] returning mock response for ${articleId}`);
-    return {
-      success: true,
-      article_id: articleId,
-      embedding_dimensions: 1536,
-    };
+    return { success: true };
   }
 }
