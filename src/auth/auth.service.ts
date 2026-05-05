@@ -2,6 +2,7 @@ import {
   Injectable,
   ConflictException,
   UnauthorizedException,
+  Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -23,6 +24,8 @@ import { JwtPayload } from './strategies/jwt.strategy';
  */
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly authRepository: AuthRepository,
     private readonly jwtService: JwtService,
@@ -39,6 +42,7 @@ export class AuthService {
   async register(dto: RegisterDto) {
     const existing = await this.authRepository.findUserByEmail(dto.email);
     if (existing) {
+      this.logger.warn(`[register] email already registered: ${dto.email}`);
       throw new ConflictException('Email is already registered');
     }
 
@@ -50,6 +54,8 @@ export class AuthService {
       email: dto.email,
       passwordHash,
     });
+
+    this.logger.log(`[register] user registered successfully: ${user.id}`);
 
     return {
       message: 'User registered successfully',
@@ -73,6 +79,7 @@ export class AuthService {
     
     // Check user existence and compare hashes using timing-safe comparison
     if (!user || !(await bcrypt.compare(dto.password, user.passwordHash))) {
+      this.logger.warn(`[login] failed authentication attempt: ${dto.email}`);
       throw new UnauthorizedException('Invalid email or password');
     }
 
@@ -81,6 +88,8 @@ export class AuthService {
       email: user.email,
       role: user.role,
     };
+
+    this.logger.log(`[login] user authenticated successfully: ${user.id}`);
 
     return {
       message: 'Login successful',
@@ -103,7 +112,9 @@ export class AuthService {
    */
   async me(userId: string) {
     const user = await this.authRepository.findUserById(userId);
- 
+    
+    this.logger.log(`[me] user profile retrieved: ${userId}`);
+
     return {
       message: 'User profile retrieved successfully',
       data: user,
