@@ -196,11 +196,24 @@ export class TicketService {
 
   /**
    * Submit a resolution response and close the ticket.
-   * * Completes the support lifecycle by providing feedback and setting status to `RESOLVED`.
+   * * Completes the support lifecycle by providing feedback and automatically notifying the user via email.
    *
    * @param id - Ticket UUID.
    * @param dto - Payload containing the administrator's feedback.
-   * @remarks This action triggers an automatic state change to terminal 'RESOLVED' status.
+   *
+   * @returns Updated ticket object with resolved status and admin response.
+   *
+   * @remarks
+   * Workflow Completion:
+   * - Transitions ticket status to terminal `RESOLVED` state.
+   * - Triggers asynchronous email notification to ticket owner via Mail Service.
+   * - Email delivery failures do not block response completion; logged for monitoring.
+   *
+   * @throws {NotFoundException} If the ticket does not exist.
+   *
+   * @security
+   * - Restricted to Admin users via Controller guards.
+   * - Email is sent to the verified owner address from the ticket's user relationship.
    */
   async respond(id: string, dto: RespondTicketDto) {
     const ticket = await this.ticketRepository.findById(id);
