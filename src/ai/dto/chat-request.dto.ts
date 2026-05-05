@@ -18,18 +18,18 @@ export interface ChatHistoryItem {
  * Request payload for retrieval-augmented generation (RAG) chat endpoint.
  * Contains user query, conversation context, and optional image attachment.
  *
- * @property conversation_id - Unique conversation identifier (UUID)
- * @property content - User message text
- * @property image_url - Optional image URL for multimodal analysis
- * @property history - Previous messages in conversation for context
+ * @property conversation_id - Unique conversation identifier (UUID).
+ * @property query - User message text for semantic search and LLM processing.
+ * @property image_url - Optional image URL for multimodal analysis (null if no image).
+ * @property history - Previous messages in conversation for context window.
  *
  * @remarks
- * Image URL optional for image-based queries or document analysis.
- * History should include recent messages (typically last 5-10) for context window efficiency.
+ * Image URL is optional for multimodal queries or document analysis.
+ * History should include recent messages (typically last 5-10) for efficient context window usage.
  */
 export interface ChatRequestDto {
   conversation_id: string;
-  content: string;
+  query: string;
   image_url: string | null;
   history: ChatHistoryItem[];
 }

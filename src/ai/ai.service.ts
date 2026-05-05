@@ -62,18 +62,18 @@ export class AiService {
    * @returns Generated answer with confidence scores and source citations.
    * @throws {HttpException} Mapped AI service errors (e.g., Rate limits, No context).
    */
-  async chat(payload: ChatRequestDto): Promise<ChatResponseDto> {
+    async chat(payload: ChatRequestDto): Promise<ChatResponseDto> {
     if (this.useMock) {
       return this.mockChatResponse();
     }
-
+ 
     try {
       const { data } = await this.client.post<ChatResponseDto>(
         '/chat',
         payload,
       );
       this.logger.log(
-        `[chat] conversation_id=${payload.conversation_id} confidence=${data.confidence_score}`,
+        `[chat] conversation_id=${payload.conversation_id} confidence=${data.confidence_score} image_analyses=${data.image_analyses?.length ?? 0}`,
       );
       return data;
     } catch (error) {
@@ -129,8 +129,16 @@ export class AiService {
 
   /**
    * Remove vector embeddings for a specific article.
-   * * Ensures that deleted articles are no longer considered in
-   * future similarity searches during the RAG process.
+   *
+   * Deletes the article's embeddings from the vector database, ensuring that
+   * deleted articles are no longer considered in future similarity searches during RAG processing.
+   *
+   * @param articleId - Target article UUID to remove embeddings for.
+   * @returns Deletion result with success status and article reference.
+   *
+   * @remarks
+   * Used during article lifecycle cleanup when an article is deleted from knowledge base.
+   * Ensures vector database and relational database remain synchronized.
    */
   async deleteEmbed(articleId: string): Promise<DeleteEmbedResponseDto> {
     if (this.useMock) {
@@ -154,8 +162,16 @@ export class AiService {
 
   /**
    * Verify the availability and health of the AI microservice.
-   * * Used for monitoring and startup verification.
-   * @throws {ServiceUnavailableException} If the AI service is unreachable.
+   *
+   * Performs a health check on the remote AI service to confirm operational status,
+   * active model information, and knowledge base statistics.
+   *
+   * @returns Health status with service status, active model name, and knowledge count.
+   * @throws {ServiceUnavailableException} If the AI service is unreachable or offline.
+   *
+   * @remarks
+   * Used for monitoring and startup verification to ensure AI service is operational
+   * before accepting user requests. Should be called during application initialization.
    */
   async healthCheck(): Promise<HealthCheckResponseDto> {
     if (this.useMock) {
@@ -238,6 +254,12 @@ export class AiService {
 
   /**
    * Development Mock: Generates a placeholder chat response.
+   *
+   * Used during development/testing when AI_SERVICE_MOCK is enabled.
+   * Simulates a complete RAG response without calling the external AI service.
+   * Includes all response fields with placeholder values for testing client integration.
+   *
+   * @returns Mock chat response with generic message, zero confidence, empty sources, and no image analyses.
    */
   private mockChatResponse(): ChatResponseDto {
     this.logger.debug('[chat] returning mock response');
@@ -246,6 +268,7 @@ export class AiService {
         '[MOCK] Maaf, sistem AI sedang dalam mode pengembangan. Silakan hubungi admin.',
       confidence_score: 0.0,
       sources: [],
+      image_analyses: [],
     };
   }
 

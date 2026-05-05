@@ -4,6 +4,7 @@ import { ConversationRepository } from '../conversation/conversation.repository'
 import { AiService } from '../ai/ai.service';
 import { SendMessageDto } from './dto/send-message.dto';
 import { ChatHistoryItem } from '../ai/dto/chat-request.dto';
+import { ChatSource } from '../ai/dto/chat-response.dto';
 
 /**
  * Chat Service
@@ -51,20 +52,22 @@ export class ChatService {
     if (!conversation) {
       throw new NotFoundException('Conversation not found');
     }
-
+    this.logger.debug(`[sendMessage] authorized user_id=${userId} conversation_id=${conversationId}`);
+ 
     // 2. Immediate Persistence: Save user message first to preserve audit trail
     const userMessage = await this.chatRepository.saveUserMessage({
       conversationId,
       content: dto.content,
       imageUrl: dto.imageUrl,
     });
-
+    this.logger.log(`[sendMessage] user message saved message_id=${userMessage.id} conversation_id=${conversationId}`);
+ 
     // 3. Context Preparation: Retrieve the rolling history window (last 10 messages)
     const recentMessages = await this.chatRepository.findRecentMessages(
       conversationId,
       10,
     );
-
+ 
     // Filter out current message to avoid redundancy in history context
     const history: ChatHistoryItem[] = recentMessages
       .filter((m) => m.id !== userMessage.id)
@@ -72,46 +75,50 @@ export class ChatService {
         role: m.role.toLowerCase() as 'user' | 'assistant',
         content: m.content,
       }));
-
-    // Default response for graceful degradation
+    this.logger.debug(`[sendMessage] context history size=${history.length} conversation_id=${conversationId}`);
+ 
+    // Default values for graceful degradation
     let aiAnswer =
       'Maaf, sistem sedang tidak tersedia. Silakan coba beberapa saat lagi atau hubungi tim support.';
     let confidenceScore = 0;
-    let sources: any[] = [];
-
+    let sources: ChatSource[] = [];
+    let imageAnalyses: string[] = [];
+ 
     // 4. AI Inference: Attempt to generate a response via RAG
     try {
       const aiResponse = await this.aiService.chat({
         conversation_id: conversationId,
-        content: dto.content,
+        query: dto.content,
         image_url: dto.imageUrl ?? null,
         history,
       });
-
+ 
       aiAnswer = aiResponse.answer;
       confidenceScore = aiResponse.confidence_score;
       sources = aiResponse.sources;
+      imageAnalyses = aiResponse.image_analyses;
     } catch (error) {
-      // Log the specific failure but do not crash the user request flow
       this.logger.error(
         `[sendMessage] AI Service failure for session ${conversationId}`,
         error instanceof Error ? error.message : String(error),
       );
     }
-
+ 
     // 5. Finalize: Persist the AI-generated response (or the fallback message)
     const assistantMessage = await this.chatRepository.saveAssistantMessage({
       conversationId,
       content: aiAnswer,
       confidenceScore,
     });
-
+    this.logger.log(`[sendMessage] assistant message saved message_id=${assistantMessage.id} confidence=${confidenceScore} sources=${sources.length} conversation_id=${conversationId}`);
+ 
     return {
       message: 'Message sent successfully',
       data: {
         userMessage,
         assistantMessage,
         sources,
+        imageAnalyses,
       },
     };
   }
