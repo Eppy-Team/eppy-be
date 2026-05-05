@@ -7,6 +7,7 @@ import { TicketRepository } from './ticket.repository';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UpdateTicketStatusDto } from './dto/update-ticket-status.dto';
 import { RespondTicketDto } from './dto/respond-ticket.dto';
+import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -25,6 +26,7 @@ import { PrismaService } from '../prisma/prisma.service';
 export class TicketService {
   constructor(
     private readonly ticketRepository: TicketRepository,
+    private readonly mailService: MailService,
     private readonly prisma: PrismaService,
   ) {}
 
@@ -40,10 +42,13 @@ export class TicketService {
   async findAllByUser(userId: string, page: number = 1, limit: number = 10) {
     const skip = (page - 1) * limit;
 
-    const { tickets, total } = await this.ticketRepository.findAllByUserId(userId, {
-      skip,
-      take: limit,
-    });
+    const { tickets, total } = await this.ticketRepository.findAllByUserId(
+      userId,
+      {
+        skip,
+        take: limit,
+      },
+    );
 
     return {
       message: 'Tickets retrieved successfully',
@@ -207,6 +212,18 @@ export class TicketService {
       id,
       dto.adminResponse,
     );
+
+    this.mailService
+      .sendTicketResponseNotification({
+        toEmail: ticket.user.email,
+        userName: ticket.user.name,
+        ticketId: ticket.id,
+        ticketTitle: ticket.title,
+        ticketStatus: updated.status,
+        adminResponse: dto.adminResponse,
+      })
+      .catch(() => {});
+
     return {
       message: 'Ticket response submitted successfully',
       data: updated,
