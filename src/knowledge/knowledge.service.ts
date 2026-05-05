@@ -4,7 +4,6 @@ import { KnowledgeRepository } from './knowledge.repository';
 import { AiService } from '../ai/ai.service';
 import { StorageService } from '../storage/storage.service';
 import { CreateKnowledgeDto } from './dto/create-knowledge.dto';
-import { UpdateKnowledgeDto } from './dto/update-knowledge.dto';
 
 /**
  * Knowledge Service
@@ -103,29 +102,6 @@ export class KnowledgeService {
     return {
       message: 'Article created. Processing embeddings.',
       data: article,
-    };
-  }
-
-  /**
-   * Update metadata for an existing knowledge article.
-   * * @param id - Target article UUID.
-   * @param dto - Partial update payload.
-   * @throws {NotFoundException} If the article is not found.
-   */
-  async update(id: string, dto: UpdateKnowledgeDto) {
-    const existing = await this.knowledgeRepository.findById(id);
-    if (!existing) {
-      throw new NotFoundException('Knowledge article not found');
-    }
-
-    const updated = await this.knowledgeRepository.update(id, {
-      ...(dto.title && { title: dto.title }),
-      ...(dto.category && { category: dto.category }),
-    });
-
-    return {
-      message: 'Article updated',
-      data: updated,
     };
   }
 

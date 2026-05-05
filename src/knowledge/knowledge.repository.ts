@@ -129,28 +129,6 @@ export class KnowledgeRepository {
   }
 
   /**
-   * Update metadata for an existing knowledge article.
-   *
-   * @param id - The article UUID.
-   * @param data - Partial update input following Prisma's schema.
-   * @returns The updated article record.
-   */
-  async update(id: string, data: Prisma.KnowledgeArticleUpdateInput) {
-    return this.prisma.knowledgeArticle.update({
-      where: { id },
-      data,
-      select: {
-        id: true,
-        title: true,
-        category: true,
-        fileUrl: true,
-        embeddingStatus: true,
-        updatedAt: true,
-      },
-    });
-  }
-
-  /**
    * Atomic update for the article's embedding lifecycle status.
    *
    * @param id - The article UUID.

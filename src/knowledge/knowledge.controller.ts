@@ -19,7 +19,6 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { KnowledgeService } from './knowledge.service';
 import { CreateKnowledgeDto } from './dto/create-knowledge.dto';
-import { UpdateKnowledgeDto } from './dto/update-knowledge.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -105,22 +104,6 @@ export class KnowledgeController {
   ) {
     if (!file) throw new BadRequestException('PDF file is required');
     return this.knowledgeService.create(dto, file, userId);
-  }
-
-  /**
-   * Update knowledge article metadata.
-   * * Updating title or category will trigger a re-embedding process 
-   * to ensure AI context remains accurate.
-   * * @param id - Article UUID.
-   * @param dto - Partial metadata updates.
-   * @remarks Re-embedding runs asynchronously in the background.
-   */
-  @Patch(':id')
-  async update(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: UpdateKnowledgeDto,
-  ) {
-    return this.knowledgeService.update(id, dto);
   }
 
   /**
