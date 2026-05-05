@@ -169,7 +169,6 @@ export class KnowledgeService {
             `[embed] AI returned success=false for ${articleId}`,
           );
 
-          // Cleanup S3 juga saat AI return success=false
           this.storageService
             .delete(fileKey)
             .catch((err) =>
@@ -188,7 +187,6 @@ export class KnowledgeService {
       .catch((err) => {
         this.logger.error(`[embed] failed for ${articleId}`, err?.message);
 
-        // Hapus file dari S3 karena embedding gagal — cleanup storage
         this.storageService
           .delete(fileKey)
           .then(() =>
