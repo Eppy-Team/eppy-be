@@ -107,12 +107,19 @@ export class KnowledgeService {
 
   /**
    * Remove an article and its associated cloud/AI resources.
-   * * Lifecycle Cleanup:
-   * 1. Synchronous database record deletion.
-   * 2. Asynchronous S3 file cleanup.
-   * 3. Asynchronous AI vector deletion.
-   * * @param id - Target article UUID.
+   *
+   * Execution Flow:
+   * 1. Verify article exists in database.
+   * 2. Delete article record from database (synchronous).
+   * 3. Trigger background cleanup of S3 file and vector embeddings (asynchronous).
+   *
+   * @param id - Target article UUID.
+   * @returns Success confirmation message.
    * @throws {NotFoundException} If the article is not found.
+   *
+   * @remarks
+   * Resource cleanup runs in the background and does not block the response.
+   * Orphaned resources are logged for manual cleanup if operations fail.
    */
   async delete(id: string) {
     const existing = await this.knowledgeRepository.findById(id);
@@ -122,29 +129,7 @@ export class KnowledgeService {
 
     await this.knowledgeRepository.delete(id);
 
-    // Asynchronous cleanup tasks with error logging
-    if (existing.fileKey) {
-      this.storageService
-        .delete(existing.fileKey)
-        .catch((err) =>
-          this.logger.error(
-            `[delete] S3 cleanup failed for ${id}`,
-            err?.message,
-          ),
-        );
-    }
-
-    this.aiService
-      .deleteEmbed(id)
-      .then(() =>
-        this.logger.log(`[delete] Vector embedding deleted for ${id}`),
-      )
-      .catch((err) =>
-        this.logger.error(
-          `[delete] Vector cleanup failed for ${id}`,
-          err?.message,
-        ),
-      );
+    this.cleanupResources(id, existing.fileKey);
 
     return { message: 'Article deleted' };
   }
@@ -220,5 +205,51 @@ export class KnowledgeService {
           .updateEmbeddingStatus(articleId, EmbeddingStatus.FAILED)
           .catch(() => {});
       });
+  }
+
+  /**
+   * Private: Cleans up cloud storage and vector database resources for a deleted article.
+   *
+   * Executes parallel deletion tasks with fault-tolerant error handling.
+   * If either operation fails, logs the orphaned resource for manual cleanup.
+   *
+   * Cleanup Workflow:
+   * 1. Delete PDF file from S3 storage (if fileKey exists).
+   * 2. Delete vector embeddings from AI database (parallel execution).
+   * 3. Log results: successful cleanup, orphaned S3 file, or orphaned vectors.
+   *
+   * @param articleId - Article UUID for logging and vector cleanup.
+   * @param fileKey - S3 file key for storage deletion. Can be null if no file was stored.
+   *
+   * @remarks
+   * Uses Promise.allSettled for parallel execution to ensure both cleanup operations
+   * are attempted even if one fails. Failures are logged but do not throw exceptions,
+   * allowing the delete operation to complete successfully while flagging orphaned resources.
+   */
+  private async cleanupResources(articleId: string, fileKey: string | null) {
+    const results = await Promise.allSettled([
+      fileKey ? this.storageService.delete(fileKey) : Promise.resolve(),
+      this.aiService.deleteEmbed(articleId),
+    ]);
+
+    const [storageResult, aiResult] = results;
+
+    if (storageResult.status === 'rejected') {
+      this.logger.error(
+        `[cleanup] ORPHANED S3 FILE — manual cleanup needed. fileKey: ${fileKey}`,
+        storageResult.reason?.message,
+      );
+    }
+
+    if (aiResult.status === 'rejected') {
+      this.logger.error(
+        `[cleanup] ORPHANED VECTOR — manual cleanup needed for articleId: ${articleId}`,
+        aiResult.reason?.message,
+      );
+    }
+
+    if (storageResult.status === 'fulfilled' && aiResult.status === 'fulfilled') {
+      this.logger.log(`[cleanup] All resources cleaned up for ${articleId}`);
+    }
   }
 }
