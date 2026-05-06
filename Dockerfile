@@ -12,8 +12,6 @@ COPY . .
 RUN DATABASE_URL="postgresql://db:db@localhost:5432/db" npx prisma generate
 
 RUN npm run build
-RUN npm prune --production
-
 
 # --- STAGE 2: Production Runner ---
 FROM node:20-alpine AS runner
