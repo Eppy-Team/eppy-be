@@ -4,8 +4,9 @@ import {
   S3Client,
   PutObjectCommand,
   DeleteObjectCommand,
+  GetObjectCommand,
 } from '@aws-sdk/client-s3';
-import { Multer } from 'multer';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 /**
  * Storage Service
@@ -73,17 +74,17 @@ export class StorageService implements OnModuleInit {
    * Upload a PDF file to S3.
    *
    * Generates a unique filename and uploads it to the S3 bucket within a specific folder structure.
-   * Returns the public URL and S3 key for future reference.
+   * Returns a signed (temporary) URL and S3 key for future reference.
    *
    * @param file - Multer file object (buffer from memory storage).
    * @param folder - S3 folder path (defaults to 'knowledge').
-   * @returns An object containing the public URL and the S3 key.
+   * @returns An object containing the signed URL (valid for 24 hours) and the S3 key.
    *
    * @remarks
    * File naming convention: `{timestamp}-{random}.pdf`.
    * Content-Type is strictly set to 'application/pdf'.
-   * Returns the public S3 URL in the following format:
-   * `https://{bucket}.s3.{region}.amazonaws.com/{key}`
+   * Returns a signed URL valid for 24 hours (86400 seconds).
+   * The signed URL includes AWS signature for temporary access without requiring credentials.
    */
   async upload(
     file: Express.Multer.File,
@@ -101,8 +102,13 @@ export class StorageService implements OnModuleInit {
       }),
     );
 
-    const url = `https://${this.bucket}.s3.${this.region}.amazonaws.com/${key}`;
-    this.logger.log(`[upload] ${key}`);
+    const command = new GetObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+    });
+
+    const url = await getSignedUrl(this.s3Client, command, { expiresIn: 86400 });
+    this.logger.log(`[upload] ${key} — signed URL valid for 24 hours`);
     return { url, key };
   }
 
