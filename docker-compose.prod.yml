@@ -9,4 +9,4 @@ services:
       - '3000:3000'
     env_file:
       - .env
-    command: sh -c "npx prisma migrate deploy && node dist/src/main"
+    command: sh -c "./node_modules/.bin/prisma migrate deploy && node dist/src/main"
