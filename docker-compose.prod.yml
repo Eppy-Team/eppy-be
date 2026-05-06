@@ -1,12 +1,10 @@
 services:
   backend:
-    build:
-      context: .
-      target: runner
+    image: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:latest
     container_name: eppy-be-prod
     restart: always
     ports:
       - '3000:3000'
     env_file:
       - .env
-    command: sh -c "./node_modules/.bin/prisma migrate deploy && node dist/src/main"
+    command: sh -c "npx prisma migrate deploy && node dist/src/main"
