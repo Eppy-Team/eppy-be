@@ -4,13 +4,14 @@ WORKDIR /app
 
 COPY package*.json ./
 COPY prisma ./prisma/
+
 RUN npm ci
 
 COPY . .
 
 RUN DATABASE_URL="postgresql://db:db@localhost:5432/db" npx prisma generate
 
-RUN npx prisma generate 
+RUN npm run build
 RUN npm prune --production
 
 
