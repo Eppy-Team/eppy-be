@@ -1,6 +1,6 @@
 services:
   backend:
-    image: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:latest
+    image: ghcr.io/eppy-team/eppy-be:latest 
     container_name: eppy-be-prod
     restart: always
     ports:
