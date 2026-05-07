@@ -109,7 +109,6 @@ model KnowledgeArticle {
   fileKey         String?         @map("file_key")
   category        String
   embeddingStatus EmbeddingStatus @default(PENDING) @map("embedding_status")
-  embedding       Unsupported("vector(1536)")?
   createdAt       DateTime        @default(now()) @map("created_at")
   updatedAt       DateTime        @updatedAt @map("updated_at")
 
