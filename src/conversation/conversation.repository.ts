@@ -5,7 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
  * Conversation Repository
  *
  * Data Access Layer for conversation and message entities.
- * Encapsulates all database interactions using Prisma ORM, ensuring 
+ * Encapsulates all database interactions using Prisma ORM, ensuring
  * strict data isolation and optimized query execution.
  *
  * Responsibilities:
@@ -60,7 +60,7 @@ export class ConversationRepository {
    * @returns The conversation object or null if not found/unauthorized.
    *
    * @remarks
-   * This method acts as a security gate by filtering by both ID and UserID 
+   * This method acts as a security gate by filtering by both ID and UserID
    * at the database level to prevent ID-guessing attacks.
    */
   async findById(id: string, userId: string) {
@@ -77,17 +77,18 @@ export class ConversationRepository {
   /**
    * Fetch the chronological message history for a specific conversation.
    *
-   * Performs a two-step verification process to ensure the requesting user 
-   * owns the target conversation before retrieving its messages.
+   * Performs a two-step verification: first checks ownership, then retrieves all messages
+   * in chronological order with full metadata including image references and AI confidence.
    *
-   * @param conversationId - The target conversation UUID.
-   * @param userId - The user ID for authorization.
-   * @returns An array of messages or null if the conversation access is denied.
+   * @param conversationId - Target conversation UUID.
+   * @param userId - User ID for ownership verification.
+   * @returns Array of messages with full metadata, or null if unauthorized.
    *
    * @remarks
-   * - Data Integrity: Messages are sorted in ascending order (`asc`) for chronological display.
-   * - Rich Metadata: Includes extended fields like `imageUrl` and `confidenceScore`.
-   * - Error Handling: Returns null to allow the service layer to handle 404/403 logic.
+   * Ordering: Messages returned in ascending order (oldest to newest) for chronological display.
+   * Metadata: Includes imageUrl, imageKey (for regenerating signed URLs), and confidenceScore.
+   * Authorization: Returns null on ownership mismatch; service layer handles 404/403 responses.
+   * Image Handling: imageKey is persisted to support signed URL regeneration on client requests.
    */
   async findMessages(conversationId: string, userId: string) {
     const conversation = await this.prisma.conversation.findFirst({
@@ -104,6 +105,7 @@ export class ConversationRepository {
         role: true,
         content: true,
         imageUrl: true,
+        imageKey: true,
         confidenceScore: true,
         createdAt: true,
       },

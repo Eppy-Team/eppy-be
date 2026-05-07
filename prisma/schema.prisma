@@ -72,6 +72,7 @@ model Message {
   role            MessageRole
   content         String
   imageUrl        String?     @map("image_url")
+  imageKey        String?     @map("image_key")
   confidenceScore Float?      @map("confidence_score")
   createdAt       DateTime    @default(now()) @map("created_at")
 
@@ -104,7 +105,6 @@ model KnowledgeArticle {
   id              String          @id @default(uuid())
   createdBy       String          @map("created_by")
   title           String
-  content         String?
   fileUrl         String?         @map("file_url")
   fileKey         String?         @map("file_key")
   category        String
@@ -127,22 +127,4 @@ model ActivityLog {
   user User @relation(fields: [userId], references: [id])
 
   @@map("activity_logs")
-}
-
-model LangchainPgCollection {
-  uuid      String   @id @default(uuid()) @db.Uuid
-  name      String
-  cmetadata Json?
-
-  @@map("langchain_pg_collection")
-}
-
-model LangchainPgEmbedding {
-  id           String   @id @default(uuid()) @db.Uuid
-  collectionId String?  @map("collection_id") @db.Uuid
-  embedding    Unsupported("vector")?
-  document     String?
-  cmetadata    Json?
-
-  @@map("langchain_pg_embedding")
 }

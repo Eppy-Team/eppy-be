@@ -4,32 +4,35 @@ import { PrismaService } from '../prisma/prisma.service';
 
 /**
  * Chat Repository
- * * Data Access Layer (DAL) for managing chat message persistence.
- * This repository handles all low-level interactions with the message table, 
- * optimizing for fast retrieval of conversation history.
+ *
+ * Data Access Layer (DAL) for message persistence and retrieval within conversations.
+ * Optimizes for fast context windowing and immutable audit trails using strict role separation.
  *
  * @remarks
- * Data Integrity:
- * - Implements strict role separation (USER vs ASSISTANT).
- * - Enforces immutable audit trails; messages are appended, never modified.
- * - Optimized for RAG context windowing through selective field loading.
+ * Design Principles:
+ * - Role Separation: Enforces USER and ASSISTANT message types (enum-based).
+ * - Immutability: Messages are append-only; updates are discouraged by design.
+ * - Context Windowing: Fetches recent messages efficiently for LLM context.
+ * - Multimodal Support: Stores image metadata (URL + S3 key) alongside text content.
  */
 @Injectable()
 export class ChatRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Fetch the most recent history for a conversation.
-   * * Retrieves a specific number of messages in chronological order (oldest to newest).
+   * Fetch the most recent N messages from a conversation in chronological order.
    *
-   * @param conversationId - The unique identifier of the chat session.
-   * @param limit - Number of previous messages to include in the context window.
-   * @returns A pruned list of messages containing only core content and roles.
+   * Retrieves a window of messages for RAG context. Uses a 'fetch-desc-then-reverse'
+   * pattern to efficiently get the latest messages while maintaining correct order.
+   *
+   * @param conversationId - Unique identifier of the conversation.
+   * @param limit - Number of messages to retrieve (default: 10).
+   * @returns Chronological message array (oldest to newest) with id, role, content.
    *
    * @remarks
-   * Performance Strategy:
-   * - Uses `take` to prevent memory overflow from long conversations.
-   * - Employs a 'Fetch-Desc-then-Reverse' pattern to ensure we get the *latest* * messages but return them in the *correct order* for LLM consumption.
+   * Context Window: Typical limit is 10 for efficient RAG context retrieval.
+   * Ordering: Always returns messages in ascending order (oldest → newest) for LLM consumption.
+   * Performance: Uses `take` to prevent memory overflow on long conversations.
    */
   async findRecentMessages(conversationId: string, limit: number = 10) {
     const messages = await this.prisma.message.findMany({
@@ -43,21 +46,27 @@ export class ChatRepository {
       },
     });
 
-    // Reversing ensures the AI receives context in natural chronological order
     return messages.reverse();
   }
 
   /**
-   * Persist an incoming user message.
-   * * Captures user input and optional multimodal attachments before AI processing.
+   * Persist an incoming user message with optional image metadata.
    *
-   * @param data - The message payload including context and attachments.
-   * @returns The saved message entity with generated metadata (ID, Timestamp).
+   * Captures user input and optional multimodal attachments (image URL + S3 key)
+   * before AI processing. Stores both the signed URL and key for future regeneration.
+   *
+   * @param data - Message payload: conversationId, content, and optional imageUrl/imageKey.
+   * @returns Saved message entity with id, role, content, imageUrl, and createdAt timestamp.
+   *
+   * @remarks
+   * Image Storage: Both `imageUrl` (signed URL) and `imageKey` (S3 path) are persisted.
+   * The key allows regenerating fresh signed URLs when retrieving old messages.
    */
   async saveUserMessage(data: {
     conversationId: string;
     content: string;
     imageUrl?: string;
+    imageKey?: string;
   }) {
     return this.prisma.message.create({
       data: {
@@ -65,6 +74,7 @@ export class ChatRepository {
         role: MessageRole.USER,
         content: data.content,
         imageUrl: data.imageUrl ?? null,
+        imageKey: data.imageKey ?? null,
       },
       select: {
         id: true,
@@ -77,14 +87,17 @@ export class ChatRepository {
   }
 
   /**
-   * Persist a generated AI response.
-   * * Records the assistant's output and the associated confidence metrics.
+   * Persist a generated AI response with quality metrics.
    *
-   * @param data - The AI response and certainty metadata.
-   * @returns The saved assistant message entity.
-   * * @remarks
-   * Confidence scores are persisted for future quality audits and 
-   * analytics of the RAG engine performance.
+   * Records the assistant's synthesized output and confidence score from the RAG engine.
+   * Enables post-hoc quality audits and analytics on response reliability.
+   *
+   * @param data - AI response bundle: conversationId, content, and confidenceScore.
+   * @returns Saved assistant message with id, role, content, confidenceScore, and createdAt.
+   *
+   * @remarks
+   * Confidence Score: Range [0, 1]. Lower values indicate uncertainty or fallback responses.
+   * Used for quality monitoring and user-facing indicators (e.g., confidence badges).
    */
   async saveAssistantMessage(data: {
     conversationId: string;

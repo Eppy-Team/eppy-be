@@ -7,25 +7,30 @@ import {
   GetObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { Multer } from 'multer';
 
 /**
  * Storage Service
  *
- * AWS S3 file storage abstraction layer for knowledge base file management.
- * Handles initialization, upload, and deletion operations.
+ * AWS S3 file storage abstraction layer supporting knowledge base files and chat images.
+ * Provides unified S3 operations with signed URL generation for temporary, credential-free access.
  *
  * Lifecycle:
- * - onModuleInit: Initializes S3Client with AWS credentials from the environment.
- * - Per-request: Executes upload and delete operations.
+ * - onModuleInit: Initializes S3Client with AWS credentials from ConfigService.
+ * - Per-request: Executes upload, delete, and URL generation operations.
  *
  * Responsibilities:
- * - S3 connection management.
- * - PDF file uploads to S3.
- * - File deletion from S3.
- * - URL generation for uploaded files.
+ * - S3 client lifecycle management and connection pooling.
+ * - Multiformat file uploads (PDFs for knowledge, images for chat).
+ * - File deletion from S3 with idempotent error handling.
+ * - Signed URL generation with configurable expiration (1 hour default).
  *
  * Dependencies:
- * - ConfigService: AWS configuration (bucket, region, credentials).
+ * - ConfigService: AWS credentials and bucket configuration.
+ *
+ * @remarks
+ * Security: Signed URLs expire after 1 hour. For long-lived access, regenerate URLs.
+ * Error Handling: S3 delete is idempotent; non-existent keys do not throw errors.
  */
 @Injectable()
 export class StorageService implements OnModuleInit {
@@ -33,6 +38,8 @@ export class StorageService implements OnModuleInit {
   private s3Client!: S3Client;
   private bucket!: string;
   private region!: string;
+
+  private readonly SIGNED_URL_EXPIRES_IN = 3600;
 
   constructor(private readonly configService: ConfigService) {}
 
@@ -71,19 +78,19 @@ export class StorageService implements OnModuleInit {
   }
 
   /**
-   * Upload a PDF file to S3.
+   * Upload a file to S3.
    *
    * Generates a unique filename and uploads it to the S3 bucket within a specific folder structure.
    * Returns a signed (temporary) URL and S3 key for future reference.
    *
    * @param file - Multer file object (buffer from memory storage).
    * @param folder - S3 folder path (defaults to 'knowledge').
-   * @returns An object containing the signed URL (valid for 24 hours) and the S3 key.
+   * @returns An object containing the signed URL (valid for 1 hour) and the S3 key.
    *
    * @remarks
-   * File naming convention: `{timestamp}-{random}.pdf`.
-   * Content-Type is strictly set to 'application/pdf'.
-   * Returns a signed URL valid for 24 hours (86400 seconds).
+   * File naming convention: `{timestamp}-{random}`. File extension based on actual mimetype.
+   * Content-Type is inferred from the uploaded file's mimetype.
+   * Returns a signed URL valid for 1 hour (3600 seconds).
    * The signed URL includes AWS signature for temporary access without requiring credentials.
    */
   async upload(
@@ -98,18 +105,37 @@ export class StorageService implements OnModuleInit {
         Bucket: this.bucket,
         Key: key,
         Body: file.buffer,
-        ContentType: 'application/pdf',
+        ContentType: file.mimetype,
       }),
     );
 
+    const url = await this.generateSignedUrl(key);
+    this.logger.log(`[upload] ${key}`);
+    return { url, key };
+  }
+
+  /**
+   * Generate a signed URL for accessing an S3 object.
+   *
+   * Creates a temporary, time-limited URL that allows access to a file without AWS credentials.
+   * Used for secure file distribution and image retrieval.
+   *
+   * @param key - The S3 object key (path).
+   * @returns A signed URL valid for 1 hour (3600 seconds).
+   *
+   * @remarks
+   * The signed URL contains embedded AWS credentials and expires after 1 hour.
+   * Commonly called after file upload or when regenerating URLs for existing files.
+   */
+  async generateSignedUrl(key: string): Promise<string> {
     const command = new GetObjectCommand({
       Bucket: this.bucket,
       Key: key,
     });
 
-    const url = await getSignedUrl(this.s3Client, command, { expiresIn: 86400 });
-    this.logger.log(`[upload] ${key} — signed URL valid for 24 hours`);
-    return { url, key };
+    return getSignedUrl(this.s3Client, command, {
+      expiresIn: this.SIGNED_URL_EXPIRES_IN,
+    });
   }
 
   /**

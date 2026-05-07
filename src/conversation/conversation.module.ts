@@ -2,29 +2,28 @@ import { Module } from '@nestjs/common';
 import { ConversationController } from './conversation.controller';
 import { ConversationService } from './conversation.service';
 import { ConversationRepository } from './conversation.repository';
+import { StorageModule } from '../storage/storage.module';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
  * Conversation Module
  *
- * A feature module dedicated to conversation history management.
- * Provides a structured REST API for managing user-specific chat sessions 
- * and retrieving chronological message logs.
+ * Manages conversation lifecycle: creation, retrieval, and message history browsing.
+ * Enforces strict user data isolation through ownership-based access control.
  *
- * @remarks
- * Design Strategy:
- * This module follows a strict Separation of Concerns (SoC) principle. 
- * While it handles retrieval and metadata management, the actual message 
- * generation and AI orchestration are delegated to the ChatModule.
+ * Architecture & Integration:
+ * - Responsible for: Session metadata (titles, creation dates, participants).
+ * - Delegates to ChatModule: Message creation, AI inference, message management.
+ * - Uses StorageModule: For signed URL regeneration on historical messages with images.
  *
  * Exports:
- * - ConversationRepository: Exported to allow integration with ChatModule 
- * for cross-module data persistence.
+ * - ConversationRepository: Made available to ChatModule for cross-feature integration.
  *
- * Dependencies:
- * - PrismaService: Provides centralized database connectivity.
+ * @remarks
+ * Separation of Concerns: This module is the 'session shell'; ChatModule is the 'content engine'.
  */
 @Module({
+  imports: [StorageModule],
   controllers: [ConversationController],
   providers: [ConversationService, ConversationRepository, PrismaService],
   exports: [ConversationRepository],

@@ -5,18 +5,21 @@ import { Prisma, EmbeddingStatus } from '@prisma/client';
 /**
  * Knowledge Repository
  *
- * Data Access Layer for the `knowledge_article` entity.
- * Encapsulates all direct database interactions using Prisma ORM, providing
- * optimized queries and consistent state mutations.
+ * Data Access Layer for the knowledge base (`knowledge_article` table).
+ * Manages CRUD operations, pagination, and embedding status lifecycle for document management.
  *
  * Responsibilities:
- * - Paginated data retrieval with total count aggregation.
- * - Resource creation with initial state management.
- * - Targeted metadata and status updates.
- * - Hard deletion of article records.
+ * - Paginated article retrieval with total count aggregation.
+ * - Article creation with initial state management (`embeddingStatus: PENDING`).
+ * - Embedding status transitions for background vector processing pipeline.
+ * - Hard deletion with associated metadata cleanup markers.
  *
  * Dependencies:
- * - PrismaService: Core database engine client.
+ * - PrismaService: Database client for Prisma ORM operations.
+ *
+ * @remarks
+ * Embedding Lifecycle: PENDING → PROCESSING → DONE (or FAILED).
+ * File References: Articles store S3 keys for cleanup during deletion.
  */
 @Injectable()
 export class KnowledgeRepository {
@@ -77,7 +80,6 @@ export class KnowledgeRepository {
       select: {
         id: true,
         title: true,
-        content: true,
         category: true,
         fileUrl: true,
         fileKey: true,
@@ -92,14 +94,15 @@ export class KnowledgeRepository {
   }
 
   /**
-   * Persist a new knowledge article record.
+   * Persist a new knowledge article record with initial embedding state.
    *
-   * @param data - Payload for creating an article, including ownership and file references.
-   * @returns The newly created article record with essential fields.
+   * @param data - Payload: title, category, fileUrl, fileKey (S3), createdBy (admin user ID).
+   * @returns Created article with id, title, category, fileUrl, embeddingStatus, createdAt.
    *
    * @remarks
-   * - Default State: `embeddingStatus` is initialized to `PENDING`.
-   * - Audit: Maps `createdBy` to the authenticated admin user.
+   * Initial State: `embeddingStatus` defaults to `PENDING` (queued for vector embedding).
+   * Audit Trail: `createdBy` field stores the authenticated admin user's ID for accountability.
+   * File Reference: `fileKey` is stored for S3 cleanup during article deletion.
    */
   async create(data: {
     title: string;
