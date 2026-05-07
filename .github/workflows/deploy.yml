@@ -56,9 +56,11 @@ jobs:
             echo "${{ secrets.GITHUB_TOKEN }}" | sudo docker login ghcr.io -u ${{ github.actor }} --password-stdin
             
             cd ~/eppy-be
-            git pull origin main
+            git fetch origin main
+            git reset --hard origin/main
+            git clean -fd
             
             sudo docker compose -f docker-compose.prod.yml pull
             sudo docker compose -f docker-compose.prod.yml up -d
             
-            sudo docker image prune -f
+            sudo docker image prune -af
