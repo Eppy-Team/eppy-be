@@ -77,7 +77,6 @@ export class KnowledgeRepository {
       select: {
         id: true,
         title: true,
-        content: true,
         category: true,
         fileUrl: true,
         fileKey: true,

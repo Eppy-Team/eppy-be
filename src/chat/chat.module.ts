@@ -4,6 +4,7 @@ import { ChatService } from './chat.service';
 import { ChatRepository } from './chat.repository';
 import { AiModule } from '../ai/ai.module';
 import { ConversationModule } from '../conversation/conversation.module';
+import { StorageModule } from 'src/storage/storage.module';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -25,6 +26,7 @@ import { PrismaService } from '../prisma/prisma.service';
   imports: [
     AiModule, 
     ConversationModule,
+    StorageModule,
   ],
   controllers: [ChatController],
   providers: [

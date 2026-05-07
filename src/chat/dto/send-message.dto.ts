@@ -19,17 +19,4 @@ export class SendMessageDto {
   @IsString({ message: 'Message content must be a valid string' })
   @IsNotEmpty({ message: 'Message content cannot be empty' })
   content!: string;
-
-  /**
-   * Optional URL reference to an image attachment.
-   * * Used for vision-capable AI tasks (e.g., analyzing screenshots or documents).
-   * * @remarks
-   * If provided, the URL must be publicly accessible for the AI service 
-   * to fetch and process the image context.
-   * * @example "https://storage.eppy.app/uploads/error-log.png"
-   */
-  @IsOptional()
-  @IsString({ message: 'Image URL must be a valid string' })
-  @IsUrl({}, { message: 'Image URL must be a valid and accessible URL' })
-  imageUrl?: string;
 }

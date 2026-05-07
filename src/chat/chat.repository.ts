@@ -5,7 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 /**
  * Chat Repository
  * * Data Access Layer (DAL) for managing chat message persistence.
- * This repository handles all low-level interactions with the message table, 
+ * This repository handles all low-level interactions with the message table,
  * optimizing for fast retrieval of conversation history.
  *
  * @remarks
@@ -43,7 +43,6 @@ export class ChatRepository {
       },
     });
 
-    // Reversing ensures the AI receives context in natural chronological order
     return messages.reverse();
   }
 
@@ -58,6 +57,7 @@ export class ChatRepository {
     conversationId: string;
     content: string;
     imageUrl?: string;
+    imageKey?: string;
   }) {
     return this.prisma.message.create({
       data: {
@@ -65,6 +65,7 @@ export class ChatRepository {
         role: MessageRole.USER,
         content: data.content,
         imageUrl: data.imageUrl ?? null,
+        imageKey: data.imageKey ?? null,
       },
       select: {
         id: true,
@@ -83,7 +84,7 @@ export class ChatRepository {
    * @param data - The AI response and certainty metadata.
    * @returns The saved assistant message entity.
    * * @remarks
-   * Confidence scores are persisted for future quality audits and 
+   * Confidence scores are persisted for future quality audits and
    * analytics of the RAG engine performance.
    */
   async saveAssistantMessage(data: {

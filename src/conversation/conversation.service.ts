@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConversationRepository } from './conversation.repository';
+import { StorageService } from '../storage/storage.service';
 import { CreateConversationDto } from './dto/create-conversation.dto';
 
 /**
@@ -16,6 +17,7 @@ import { CreateConversationDto } from './dto/create-conversation.dto';
 export class ConversationService {
   constructor(
     private readonly conversationRepository: ConversationRepository,
+    private readonly storageService: StorageService,
   ) {}
 
   /**
@@ -28,11 +30,12 @@ export class ConversationService {
    * @returns A structured response containing the message and conversation data.
    *
    * @remarks
-   * Query optimization is handled at the repository level by selecting 
+   * Query optimization is handled at the repository level by selecting
    * only necessary fields for the last message preview.
    */
   async findAll(userId: string) {
-    const conversations = await this.conversationRepository.findAllByUserId(userId);
+    const conversations =
+      await this.conversationRepository.findAllByUserId(userId);
 
     return {
       message: 'Conversations retrieved',
@@ -43,7 +46,7 @@ export class ConversationService {
   /**
    * Retrieve the complete message history for a specific conversation.
    *
-   * Validates conversation ownership before returning data to prevent 
+   * Validates conversation ownership before returning data to prevent
    * unauthorized access across user accounts.
    *
    * @param conversationId - UUID of the target conversation.
@@ -64,9 +67,30 @@ export class ConversationService {
       throw new NotFoundException('Conversation not found');
     }
 
+    // Re-generate fresh signed URL untuk setiap message yang punya gambar
+    // Dilakukan paralel agar tidak lambat
+    const messagesWithFreshUrls = await Promise.all(
+      messages.map(async (message) => {
+        if (message.imageKey) {
+          const freshUrl = await this.storageService.generateSignedUrl(
+            message.imageKey,
+          );
+          return {
+            ...message,
+            imageUrl: freshUrl,
+            imageKey: undefined,
+          };
+        }
+        return {
+          ...message,
+          imageKey: undefined,
+        };
+      }),
+    );
+
     return {
-      message: 'Messages retrieved',
-      data: messages,
+      message: 'Messages retrieved successfully',
+      data: messagesWithFreshUrls,
     };
   }
 
@@ -78,7 +102,7 @@ export class ConversationService {
    * @returns The created conversation record.
    *
    * @remarks
-   * Initial State: Conversations are created as empty threads. 
+   * Initial State: Conversations are created as empty threads.
    * Subsequent messages are handled by the messaging service/module.
    */
   async create(dto: CreateConversationDto, userId: string) {

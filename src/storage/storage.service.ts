@@ -7,6 +7,7 @@ import {
   GetObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { Multer } from 'multer';
 
 /**
  * Storage Service
@@ -33,6 +34,8 @@ export class StorageService implements OnModuleInit {
   private s3Client!: S3Client;
   private bucket!: string;
   private region!: string;
+
+  private readonly SIGNED_URL_EXPIRES_IN = 3600;
 
   constructor(private readonly configService: ConfigService) {}
 
@@ -98,18 +101,24 @@ export class StorageService implements OnModuleInit {
         Bucket: this.bucket,
         Key: key,
         Body: file.buffer,
-        ContentType: 'application/pdf',
+        ContentType: file.mimetype,
       }),
     );
 
+    const url = await this.generateSignedUrl(key);
+    this.logger.log(`[upload] ${key}`);
+    return { url, key };
+  }
+
+  async generateSignedUrl(key: string): Promise<string> {
     const command = new GetObjectCommand({
       Bucket: this.bucket,
       Key: key,
     });
 
-    const url = await getSignedUrl(this.s3Client, command, { expiresIn: 86400 });
-    this.logger.log(`[upload] ${key} — signed URL valid for 24 hours`);
-    return { url, key };
+    return getSignedUrl(this.s3Client, command, {
+      expiresIn: this.SIGNED_URL_EXPIRES_IN,
+    });
   }
 
   /**
