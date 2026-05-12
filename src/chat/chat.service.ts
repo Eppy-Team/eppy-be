@@ -7,6 +7,23 @@ import { SendMessageDto } from './dto/send-message.dto';
 import { ChatHistoryItem } from '../ai/dto/chat-request.dto';
 import { ChatSource } from '../ai/dto/chat-response.dto';
 
+/**
+ * Chat Service
+ *
+ * Orchestrates the complete message flow: user input → S3 upload → AI processing → persistence.
+ * Handles multimodal interactions (text + images), manages conversation context, and integrates
+ * with the RAG (Retrieval-Augmented Generation) pipeline for intelligent responses.
+ *
+ * Dependencies:
+ * - ChatRepository: Persists messages with roles and metadata.
+ * - ConversationRepository: Validates conversation ownership and retrieves context.
+ * - AiService: Executes RAG queries and generates responses.
+ * - StorageService: Manages S3 file uploads and signed URLs.
+ *
+ * @remarks
+ * Error Handling: Implements graceful degradation — if AI service fails,
+ * a fallback message is returned and the flow completes normally.
+ */
 @Injectable()
 export class ChatService {
   private readonly logger = new Logger(ChatService.name);
@@ -18,6 +35,33 @@ export class ChatService {
     private readonly storageService: StorageService,
   ) {}
 
+  /**
+   * Send a message within a conversation and retrieve AI-generated response.
+   *
+   * Executes a complete RAG pipeline: validates ownership → uploads images → persists user message
+   * → fetches context history → queries AI → saves assistant response → returns bundle.
+   *
+   * @param conversationId - UUID of the target conversation (validated against userId).
+   * @param userId - Authenticated user's ID (from JWT token).
+   * @param dto - Message payload containing text content.
+   * @param imageFile - Optional image attachment (JPG/PNG/WEBP, max 5MB).
+   * @returns Response object with user/assistant messages, citation sources, and image analysis.
+   *
+   * @status 201 Created
+   * @throws {NotFoundException} If conversation doesn't exist or doesn't belong to the user.
+   * @throws {BadRequestException} If image upload fails or DTO validation fails.
+   *
+   * @remarks
+   * Flow:
+   * 1. Verify conversation ownership to prevent cross-user access.
+   * 2. Upload image to S3 (if provided) and store signed URL + key.
+   * 3. Persist user message with image metadata.
+   * 4. Fetch last 10 messages as RAG context.
+   * 5. Query AI service with user prompt + image URL + history.
+   * 6. On AI failure: gracefully degrade to fallback message (confidence=0).
+   * 7. Persist AI response with confidence score.
+   * 8. Return bundled response with sources and image analyses.
+   */
   async sendMessage(
     conversationId: string,
     userId: string,

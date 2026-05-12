@@ -50,21 +50,26 @@ export class ChatController {
   constructor(private readonly chatService: ChatService) {}
 
   /**
-   * Submit a new message and trigger AI inference.
-   * * Acts as the primary entry point for the RAG engine. It accepts user prompts,
-   * processes multimodal context, and returns a synthesized AI response.
+   * Submit a message with optional image and retrieve AI response.
    *
-   * @param conversationId - The UUID of the specific conversation thread.
-   * @param userId - Extracted automatically from the verified JWT payload.
-   * @param dto - Validated message payload (Content + Optional Image).
-   * @returns A bundle containing participant messages and factual citations.
+   * Acts as the primary entry point for the RAG engine. Accepts user prompts and optional
+   * multimodal context (images), processes them through the AI pipeline, and returns a
+   * synthesized response with citations and image analysis results.
+   *
+   * @param conversationId - UUID of the target conversation (validated for ownership).
+   * @param userId - Authenticated user ID (from JWT token via `@CurrentUser`).
+   * @param dto - Message payload containing text content.
+   * @param file - Optional image file (JPG/PNG/WEBP, max 5MB).
+   * @returns Response containing user message, assistant message, sources, and image analyses.
    *
    * @status 201 Created
-   * @throws {NotFoundException} If the conversation UUID is invalid or doesn't belong to the user.
-   * @throws {BadRequestException} If the payload fails DTO validation (e.g., empty content).
+   * @throws {NotFoundException} If conversation ID is invalid or doesn't belong to the user.
+   * @throws {BadRequestException} If image MIME type is unsupported or file size exceeds 5MB.
    *
    * @example
    * POST /conversations/550e8400-e29b-41d4-a716-446655440000/messages
+   * Body: { "content": "What does this image show?" }
+   * File: image.jpg
    */
    @Post(':id/messages')
   @UseInterceptors(FileInterceptor('file', imageUploadOptions))
