@@ -34,6 +34,11 @@ enum EmbeddingStatus {
   FAILED
 }
 
+enum MessageFeedback {
+  HELPFUL
+  NOT_HELPFUL
+}
+
 /// MODELS
 
 model User {
@@ -67,16 +72,17 @@ model Conversation {
 }
 
 model Message {
-  id              String      @id @default(uuid())
-  conversationId  String      @map("conversation_id")
+  id              String              @id @default(uuid())
+  conversationId  String              @map("conversation_id")
   role            MessageRole
   content         String
-  imageUrl        String?     @map("image_url")
-  imageKey        String?     @map("image_key")
-  confidenceScore Float?      @map("confidence_score")
-  createdAt       DateTime    @default(now()) @map("created_at")
+  imageUrl        String?             @map("image_url")
+  imageKey        String?             @map("image_key")
+  confidenceScore Float?              @map("confidence_score")
+  feedback        MessageFeedback?
+  createdAt       DateTime            @default(now()) @map("created_at")
 
-  conversation Conversation @relation(fields: [conversationId], references: [id])
+  conversation Conversation           @relation(fields: [conversationId], references: [id])
   tickets      Ticket[]
 
   @@map("messages")
