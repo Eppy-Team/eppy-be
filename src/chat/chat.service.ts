@@ -70,6 +70,7 @@ export class ChatService {
     dto: SendMessageDto,
     imageFile?: Express.Multer.File,
   ) {
+    // [STEP 1] Verify conversation ownership to prevent cross-user access
     const conversation = await this.conversationRepository.findById(
       conversationId,
       userId,
@@ -81,6 +82,7 @@ export class ChatService {
       `[sendMessage] authorized user_id=${userId} conversation_id=${conversationId}`,
     );
 
+    // [STEP 2] Upload image to S3 (if provided) and store signed URL + key
     let imageUrl: string | null = null;
     let imageKey: string | null = null;
     if (imageFile) {
@@ -95,6 +97,7 @@ export class ChatService {
       );
     }
 
+    // [STEP 3] Persist user message with image metadata
     const userMessage = await this.chatRepository.saveUserMessage({
       conversationId,
       content: dto.content,
@@ -105,6 +108,7 @@ export class ChatService {
       `[sendMessage] user message saved message_id=${userMessage.id} conversation_id=${conversationId}`,
     );
 
+    // [STEP 4] Fetch last 10 messages as RAG context
     const recentMessages = await this.chatRepository.findRecentMessages(
       conversationId,
       10,
@@ -120,6 +124,7 @@ export class ChatService {
       `[sendMessage] context history size=${history.length} conversation_id=${conversationId}`,
     );
 
+    // [STEP 5-6] Query AI service with user prompt + image URL + history (with graceful fallback)
     let aiAnswer =
       'Maaf, sistem sedang tidak tersedia. Silakan coba beberapa saat lagi atau hubungi tim support.';
     let confidenceScore = 0;
@@ -127,6 +132,7 @@ export class ChatService {
     let imageAnalyses: string[] = [];
 
     try {
+      // [STEP 5] Query AI service
       const aiResponse = await this.aiService.chat({
         conversation_id: conversationId,
         query: dto.content,
@@ -139,12 +145,14 @@ export class ChatService {
       sources = aiResponse.sources;
       imageAnalyses = aiResponse.image_analyses;
     } catch (error) {
+      // [STEP 6] On AI failure: gracefully degrade to fallback message (confidence=0)
       this.logger.error(
         `[sendMessage] AI Service failure for session ${conversationId}`,
         error instanceof Error ? error.message : String(error),
       );
     }
 
+    // [STEP 7] Persist AI response with confidence score
     const assistantMessage = await this.chatRepository.saveAssistantMessage({
       conversationId,
       content: aiAnswer,
@@ -154,6 +162,7 @@ export class ChatService {
       `[sendMessage] assistant message saved message_id=${assistantMessage.id} confidence=${confidenceScore} sources=${sources.length} conversation_id=${conversationId}`,
     );
 
+    // [STEP 8] Return bundled response with sources and image analyses
     return {
       message: 'Message sent successfully',
       data: {
@@ -165,30 +174,63 @@ export class ChatService {
     };
   }
 
+  /**
+   * Submit user feedback on an AI-generated message for quality evaluation.
+   *
+   * Validates feedback eligibility (assistant messages, no duplicate feedback) and persists
+   * the user's quality assessment. Enables post-response quality tracking for model improvement.
+   *
+   * @param conversationId - UUID of the conversation containing the message.
+   * @param messageId - UUID of the assistant message being evaluated.
+   * @param userId - Authenticated user's ID (from JWT token).
+   * @param dto - Feedback payload containing THUMBS_UP or THUMBS_DOWN value.
+   * @returns Response object with updated message and feedback status.
+   *
+   * @status 200 OK
+   * @throws {NotFoundException} If conversation doesn't belong to user or message not found.
+   * @throws {BadRequestException} If message is not from assistant or feedback already submitted.
+   *
+   * @remarks
+   * Flow:
+   * 1. Verify conversation ownership to prevent cross-user feedback injection.
+   * 2. Fetch message details and validate it belongs to the target conversation.
+   * 3. Enforce feedback eligibility: message must be from ASSISTANT role.
+   * 4. Prevent duplicate feedback: check if feedback already submitted for this message.
+   * 5. Persist feedback with MessageFeedback enum value (THUMBS_UP or THUMBS_DOWN).
+   * 6. Return success response with updated message feedback status.
+   *
+   * Immutability: Once submitted, feedback is final and cannot be changed or revoked.
+   */
   async submitFeedback(
     conversationId: string,
     messageId: string,
     userId: string,
     dto: SubmitFeedbackDto,
   ) {
+    // [STEP 1] Verify conversation ownership to prevent cross-user feedback injection
     const conversation = await this.conversationRepository.findById(conversationId, userId);
     if (!conversation) throw new NotFoundException('Conversation not found');
  
+    // [STEP 2] Fetch message details and validate it belongs to the target conversation
     const message = await this.chatRepository.findMessageById(messageId);
     if (!message || message.conversationId !== conversationId) {
       throw new NotFoundException('Message not found');
     }
  
+    // [STEP 3] Enforce feedback eligibility: message must be from ASSISTANT role
     if (message.role !== MessageRole.ASSISTANT) {
       throw new BadRequestException('Feedback hanya bisa diberikan untuk pesan dari asisten');
     }
  
+    // [STEP 4] Prevent duplicate feedback: check if feedback already submitted for this message
     if (message.feedback !== null) {
       throw new BadRequestException('Feedback untuk pesan ini sudah pernah diberikan');
     }
  
+    // [STEP 5] Persist feedback with MessageFeedback enum value (THUMBS_UP or THUMBS_DOWN)
     const updated = await this.chatRepository.submitFeedback(messageId, dto.feedback);
  
+    // [STEP 6] Return success response with updated message feedback status
     return {
       message: 'Feedback submitted successfully',
       data: updated,

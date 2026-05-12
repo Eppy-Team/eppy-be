@@ -84,7 +84,27 @@ export class ChatController {
     return this.chatService.sendMessage(conversationId, userId, dto, file);
   }
 
-   @Patch(':id/messages/:messageId/feedback')
+  /**
+   * Submit quality feedback for an AI-generated message.
+   *
+   * Endpoint for recording user's assessment (THUMBS_UP or THUMBS_DOWN) on assistant responses.
+   * Enables quality metrics collection for response reliability tracking and model improvement.
+   *
+   * @param conversationId - UUID of the conversation containing the message.
+   * @param messageId - UUID of the assistant message to provide feedback on.
+   * @param userId - Authenticated user ID (from JWT token via `@CurrentUser`).
+   * @param dto - Feedback payload with THUMBS_UP or THUMBS_DOWN value.
+   * @returns Response containing updated message feedback status.
+   *
+   * @status 200 OK
+   * @throws {NotFoundException} If conversation or message is not found or doesn't belong to user.
+   * @throws {BadRequestException} If message is not from assistant or feedback already submitted.
+   *
+   * @example
+   * PATCH /conversations/550e8400-e29b-41d4-a716-446655440000/messages/660e8400-e29b-41d4-a716-446655440000/feedback
+   * Body: { "feedback": "THUMBS_UP" }
+   */
+  @Patch(':id/messages/:messageId/feedback')
   async submitFeedback(
     @Param('id', ParseUUIDPipe) conversationId: string,
     @Param('messageId', ParseUUIDPipe) messageId: string,
