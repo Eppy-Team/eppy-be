@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { MessageRole } from '@prisma/client';
+import { MessageFeedback, MessageRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -47,6 +47,32 @@ export class ChatRepository {
     });
 
     return messages.reverse();
+  }
+
+  /**
+   * Retrieve a single message by its ID with feedback metadata.
+   *
+   * Fetches message details including role, conversation association, and any submitted feedback.
+   * Used for validation and feedback submission checks.
+   *
+   * @param id - Unique message identifier (UUID).
+   * @returns Message entity with id, role, conversationId, and feedback status, or null if not found.
+   *
+   * @remarks
+   * Feedback Status: The `feedback` field can be null (no feedback), THUMBS_UP, or THUMBS_DOWN.
+   * Conversation Validation: Returns conversationId to enable cross-conversation validation.
+   * Query Performance: Uses direct ID lookup for O(1) retrieval.
+   */
+  async findMessageById(id: string) {
+    return this.prisma.message.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        role: true,
+        conversationId: true,
+        feedback: true,
+      },
+    });
   }
 
   /**
@@ -117,6 +143,32 @@ export class ChatRepository {
         content: true,
         confidenceScore: true,
         createdAt: true,
+      },
+    });
+  }
+
+  /**
+   * Persist user feedback for an AI-generated message.
+   *
+   * Records the user's quality assessment (THUMBS_UP or THUMBS_DOWN) on an assistant response.
+   * Enables quality tracking and model improvement via feedback analytics.
+   *
+   * @param messageId - Unique identifier of the assistant message being evaluated.
+   * @param feedback - Feedback value: THUMBS_UP or THUMBS_DOWN (from MessageFeedback enum).
+   * @returns Updated message with id and feedback fields.
+   *
+   * @remarks
+   * Immutable Feedback: Once submitted, feedback cannot be changed (service layer enforces this).
+   * Audit Trail: Feedback updates include automatic timestamps via Prisma defaults.
+   * One Feedback Per Message: Database constraints prevent multiple feedback submissions per message.
+   */
+  async submitFeedback(messageId: string, feedback: MessageFeedback) {
+    return this.prisma.message.update({
+      where: { id: messageId },
+      data: { feedback },
+      select: {
+        id: true,
+        feedback: true,
       },
     });
   }
