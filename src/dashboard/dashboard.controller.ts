@@ -16,6 +16,23 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { UserRole } from '@prisma/client';
 
+/**
+ * Dashboard Controller
+ *
+ * REST API for admin analytics and reporting. Provides endpoints for real-time dashboard
+ * views and period-based report generation in JSON, PDF, and Excel formats.
+ *
+ * Security:
+ * - Requires Admin role (via @Roles decorator).
+ * - Enforces JWT authentication and role-based access control.
+ * - All endpoints protected by JwtAuthGuard and RolesGuard.
+ *
+ * @remarks
+ * Responsibilities:
+ * - Chatbot analytics dashboard with satisfaction and confidence metrics.
+ * - Ticket management dashboard with SLA metrics.
+ * - Report generation and export (JSON, PDF, Excel).
+ */
 @Controller('dashboard')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.ADMIN)
@@ -23,11 +40,21 @@ export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
   /**
+   * Retrieve chatbot performance dashboard with satisfaction and confidence metrics.
+   *
+   * Aggregates user satisfaction metrics (helpful/not helpful feedback distribution),
+   * AI response confidence statistics, and paginated conversation list.
+   *
+   * @param page - Current page number (default: 1).
+   * @param limit - Records per page (default: 10).
+   * @param status - Optional feedback filter: 'HELPFUL' or 'NOT_HELPFUL'.
+   * @returns Dashboard object with satisfaction chart, confidence scores, distribution, and conversations.
+   *
+   * @status 200 OK
+   * @security Requires Admin role
+   *
+   * @example
    * GET /dashboard/chatbot?page=1&limit=10&status=HELPFUL
-   * Data Dashboard Chatbot:
-   * - Pie chart kepuasan (puas/tidak puas)
-   * - Confidence score stats
-   * - Tabel percakapan (filter by status feedback)
    */
   @Get('chatbot')
   async getChatbotDashboard(
@@ -39,10 +66,21 @@ export class DashboardController {
   }
 
   /**
+   * Retrieve ticket management dashboard with SLA metrics and queue status.
+   *
+   * Aggregates ticket counts by status (OPEN, ON_PROGRESS, RESOLVED), calculates
+   * average response time, and provides paginated ticket list with optional filtering.
+   *
+   * @param page - Current page number (default: 1).
+   * @param limit - Records per page (default: 10).
+   * @param status - Optional status filter: 'OPEN', 'ON_PROGRESS', or 'RESOLVED'.
+   * @returns Dashboard object with ticket summary, SLA metrics, and paginated tickets.
+   *
+   * @status 200 OK
+   * @security Requires Admin role
+   *
+   * @example
    * GET /dashboard/tickets?page=1&limit=10&status=OPEN
-   * Data Dashboard Tiket:
-   * - Summary cards (total, baru, aktif, selesai, waktu balas)
-   * - Tabel tiket (filter by status)
    */
   @Get('tickets')
   async getTicketDashboard(
@@ -54,8 +92,34 @@ export class DashboardController {
   }
 
   /**
-   * GET /dashboard/report/export?startDate=...&endDate=...&format=pdf
-   * Export laporan PDF atau Excel — response adalah file download.
+   * Export system report in PDF or Excel format.
+   *
+   * Generates period-based report data and converts it to the requested file format.
+   * Returns binary file stream via HTTP response with appropriate headers.
+   *
+   * @param startDate - Report period start (format: YYYY-MM-DD, required).
+   * @param endDate - Report period end (format: YYYY-MM-DD, required).
+   * @param format - Export format (required): 'pdf' or 'excel'.
+   * @param res - Express Response object for streaming file data.
+   * @returns File stream with Content-Type and Content-Disposition headers.
+   *
+   * @status 200 OK
+   * @security Requires Admin role
+   * @throws {BadRequestException} If dates missing, format invalid, or package missing.
+   *
+   * @remarks
+   * Response Headers:
+   * - Content-Type: application/pdf or application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+   * - Content-Disposition: attachment; filename="report_<startDate>_<endDate>.<ext>"
+   * - Content-Length: File size in bytes
+   *
+   * File Formats:
+   * - PDF: Single document with all metrics and formatted sections.
+   * - Excel: Multi-sheet workbook (Overview, User Satisfaction, Chatbot Performance, Tickets).
+   *
+   * @example
+   * GET /dashboard/report/export?startDate=2026-01-01&endDate=2026-01-31&format=pdf
+   * GET /dashboard/report/export?startDate=2026-01-01&endDate=2026-01-31&format=excel
    */
   @Get('report/export')
   async exportReport(
@@ -83,8 +147,21 @@ export class DashboardController {
   }
 
   /**
-   * GET /dashboard/report?startDate=2026-01-01&endDate=2026-05-01
-   * Data laporan lengkap dalam format JSON.
+   * Generate comprehensive system report for a date range.
+   *
+   * Aggregates all dashboard metrics (conversations, messages, tickets, feedback, confidence)
+   * for a specified period. Returns JSON report with period metadata and escalation rate.
+   *
+   * @param startDate - Report period start (format: YYYY-MM-DD, required).
+   * @param endDate - Report period end (format: YYYY-MM-DD, required).
+   * @returns Comprehensive report JSON with period, metrics, statistics, and escalation rate.
+   *
+   * @status 200 OK
+   * @security Requires Admin role
+   * @throws {BadRequestException} If startDate/endDate missing or date format invalid.
+   *
+   * @example
+   * GET /dashboard/report?startDate=2026-01-01&endDate=2026-01-31
    */
   @Get('report')
   async getReport(
