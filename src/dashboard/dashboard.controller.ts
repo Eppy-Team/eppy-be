@@ -37,4 +37,19 @@ export class DashboardController {
   ) {
     return this.dashboardService.getChatbotDashboard(page, limit, status);
   }
+
+  /**
+   * GET /dashboard/tickets?page=1&limit=10&status=OPEN
+   * Data Dashboard Tiket:
+   * - Summary cards (total, baru, aktif, selesai, waktu balas)
+   * - Tabel tiket (filter by status)
+   */
+  @Get('tickets')
+  async getTicketDashboard(
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
+    @Query('status') status?: TicketStatus,
+  ) {
+    return this.dashboardService.getTicketDashboard(page, limit, status);
+  }
 }

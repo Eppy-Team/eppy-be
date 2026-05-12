@@ -93,4 +93,61 @@ export class DashboardRepository {
 
     return { conversations, total };
   }
+
+  // ─── Dashboard Tiket ──────────────────────────────────────────────────────
+
+  async getTicketStats() {
+    const [total, open, onProgress, resolved] = await Promise.all([
+      this.prisma.ticket.count(),
+      this.prisma.ticket.count({ where: { status: TicketStatus.OPEN } }),
+      this.prisma.ticket.count({ where: { status: TicketStatus.ON_PROGRESS } }),
+      this.prisma.ticket.count({ where: { status: TicketStatus.RESOLVED } }),
+    ]);
+    return { total, open, onProgress, resolved };
+  }
+
+  // Rata-rata waktu balas admin (dari createdAt ke updatedAt tiket resolved)
+  async getAverageResponseTime(): Promise<number> {
+    const resolvedTickets = await this.prisma.ticket.findMany({
+      where: { status: TicketStatus.RESOLVED },
+      select: { createdAt: true, updatedAt: true },
+    });
+
+    if (resolvedTickets.length === 0) return 0;
+
+    const totalMs = resolvedTickets.reduce((sum, ticket) => {
+      return sum + (ticket.updatedAt.getTime() - ticket.createdAt.getTime());
+    }, 0);
+
+    return Math.round(totalMs / resolvedTickets.length); // rata-rata dalam ms
+  }
+
+  // List semua tiket untuk tabel dashboard tiket
+  async getAllTickets(
+    page: number,
+    limit: number,
+    status?: TicketStatus,
+  ) {
+    const skip = (page - 1) * limit;
+
+    const [tickets, total] = await Promise.all([
+      this.prisma.ticket.findMany({
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        where: status ? { status } : undefined,
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          createdAt: true,
+          user: { select: { id: true, name: true, email: true } },
+          conversation: { select: { id: true } },
+        },
+      }),
+      this.prisma.ticket.count({ where: status ? { status } : undefined }),
+    ]);
+
+    return { tickets, total };
+  }
 }

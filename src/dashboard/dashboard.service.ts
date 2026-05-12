@@ -74,4 +74,36 @@ export class DashboardService {
       },
     };
   }
+
+  // ─── GET /dashboard/tickets ───────────────────────────────────────────────
+  // Data untuk Dashboard Tiket (summary cards + tabel tiket)
+
+  async getTicketDashboard(page: number, limit: number, status?: TicketStatus) {
+    const [ticketStats, avgResponseTimeMs, ticketsData] = await Promise.all([
+      this.dashboardRepository.getTicketStats(),
+      this.dashboardRepository.getAverageResponseTime(),
+      this.dashboardRepository.getAllTickets(page, limit, status),
+    ]);
+
+    return {
+      message: 'Ticket dashboard retrieved successfully',
+      data: {
+        // Summary cards sesuai HiFi
+        summary: {
+          total: ticketStats.total,
+          open: ticketStats.open,           // "Tiket Baru"
+          onProgress: ticketStats.onProgress, // "Tiket Aktif"
+          resolved: ticketStats.resolved,   // "Tiket Selesai"
+          avgResponseTime: msToHHMMSS(avgResponseTimeMs), // "Waktu Balas" format HH:MM:SS
+        },
+        tickets: ticketsData.tickets,
+      },
+      meta: {
+        total: ticketsData.total,
+        page,
+        limit,
+        totalPages: Math.ceil(ticketsData.total / limit),
+      },
+    };
+  }
 }
