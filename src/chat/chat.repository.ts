@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { MessageRole } from '@prisma/client';
+import { MessageFeedback, MessageRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -47,6 +47,18 @@ export class ChatRepository {
     });
 
     return messages.reverse();
+  }
+
+  async findMessageById(id: string) {
+    return this.prisma.message.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        role: true,
+        conversationId: true,
+        feedback: true,
+      },
+    });
   }
 
   /**
@@ -117,6 +129,17 @@ export class ChatRepository {
         content: true,
         confidenceScore: true,
         createdAt: true,
+      },
+    });
+  }
+
+  async submitFeedback(messageId: string, feedback: MessageFeedback) {
+    return this.prisma.message.update({
+      where: { id: messageId },
+      data: { feedback },
+      select: {
+        id: true,
+        feedback: true,
       },
     });
   }

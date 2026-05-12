@@ -1,6 +1,7 @@
 import {
   Controller,
   Post,
+  Patch,
   Body,
   Param,
   UseGuards,
@@ -16,6 +17,7 @@ import { SendMessageDto } from './dto/send-message.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/get-user.decorator';
 import { Multer } from 'multer';
+import { SubmitFeedbackDto } from './dto/submit-feedback.dto';
 
 const imageUploadOptions = {
   storage: memoryStorage(),
@@ -80,5 +82,15 @@ export class ChatController {
     @UploadedFile() file?: Express.Multer.File,
   ) {
     return this.chatService.sendMessage(conversationId, userId, dto, file);
+  }
+
+   @Patch(':id/messages/:messageId/feedback')
+  async submitFeedback(
+    @Param('id', ParseUUIDPipe) conversationId: string,
+    @Param('messageId', ParseUUIDPipe) messageId: string,
+    @CurrentUser('id') userId: string,
+    @Body() dto: SubmitFeedbackDto,
+  ) {
+    return this.chatService.submitFeedback(conversationId, messageId, userId, dto);
   }
 }

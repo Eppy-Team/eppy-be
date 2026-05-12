@@ -1,9 +1,11 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { MessageFeedback, MessageRole } from '@prisma/client';
 import { ChatRepository } from './chat.repository';
 import { ConversationRepository } from '../conversation/conversation.repository';
 import { AiService } from '../ai/ai.service';
 import { StorageService } from '../storage/storage.service';
 import { SendMessageDto } from './dto/send-message.dto';
+import { SubmitFeedbackDto } from './dto/submit-feedback.dto';
 import { ChatHistoryItem } from '../ai/dto/chat-request.dto';
 import { ChatSource } from '../ai/dto/chat-response.dto';
 
@@ -68,7 +70,6 @@ export class ChatService {
     dto: SendMessageDto,
     imageFile?: Express.Multer.File,
   ) {
-    // 1. Pastikan conversation milik user yang request
     const conversation = await this.conversationRepository.findById(
       conversationId,
       userId,
@@ -80,7 +81,6 @@ export class ChatService {
       `[sendMessage] authorized user_id=${userId} conversation_id=${conversationId}`,
     );
 
-    // 2. Upload gambar ke S3 jika ada — simpan url dan key
     let imageUrl: string | null = null;
     let imageKey: string | null = null;
     if (imageFile) {
@@ -89,13 +89,12 @@ export class ChatService {
         'chat-images',
       );
       imageUrl = uploaded.url;
-      imageKey = uploaded.key; // ← key disimpan ke DB untuk re-generate signed URL
+      imageKey = uploaded.key;
       this.logger.log(
         `[sendMessage] image uploaded to S3 key=${imageKey} conversation_id=${conversationId}`,
       );
     }
 
-    // 3. Simpan pesan user ke DB (beserta imageUrl dan imageKey)
     const userMessage = await this.chatRepository.saveUserMessage({
       conversationId,
       content: dto.content,
@@ -106,7 +105,6 @@ export class ChatService {
       `[sendMessage] user message saved message_id=${userMessage.id} conversation_id=${conversationId}`,
     );
 
-    // 4. Ambil 10 pesan terakhir sebagai history konteks AI
     const recentMessages = await this.chatRepository.findRecentMessages(
       conversationId,
       10,
@@ -122,19 +120,17 @@ export class ChatService {
       `[sendMessage] context history size=${history.length} conversation_id=${conversationId}`,
     );
 
-    // 5. Default values untuk graceful degradation
     let aiAnswer =
       'Maaf, sistem sedang tidak tersedia. Silakan coba beberapa saat lagi atau hubungi tim support.';
     let confidenceScore = 0;
     let sources: ChatSource[] = [];
     let imageAnalyses: string[] = [];
 
-    // 6. Panggil AI Service — kirim S3 URL (bukan buffer)
     try {
       const aiResponse = await this.aiService.chat({
         conversation_id: conversationId,
         query: dto.content,
-        image_url: imageUrl, // signed URL yang baru diupload, atau null
+        image_url: imageUrl,
         history,
       });
 
@@ -149,7 +145,6 @@ export class ChatService {
       );
     }
 
-    // 7. Simpan jawaban AI ke DB
     const assistantMessage = await this.chatRepository.saveAssistantMessage({
       conversationId,
       content: aiAnswer,
@@ -167,6 +162,36 @@ export class ChatService {
         sources,
         imageAnalyses,
       },
+    };
+  }
+
+  async submitFeedback(
+    conversationId: string,
+    messageId: string,
+    userId: string,
+    dto: SubmitFeedbackDto,
+  ) {
+    const conversation = await this.conversationRepository.findById(conversationId, userId);
+    if (!conversation) throw new NotFoundException('Conversation not found');
+ 
+    const message = await this.chatRepository.findMessageById(messageId);
+    if (!message || message.conversationId !== conversationId) {
+      throw new NotFoundException('Message not found');
+    }
+ 
+    if (message.role !== MessageRole.ASSISTANT) {
+      throw new BadRequestException('Feedback hanya bisa diberikan untuk pesan dari asisten');
+    }
+ 
+    if (message.feedback !== null) {
+      throw new BadRequestException('Feedback untuk pesan ini sudah pernah diberikan');
+    }
+ 
+    const updated = await this.chatRepository.submitFeedback(messageId, dto.feedback);
+ 
+    return {
+      message: 'Feedback submitted successfully',
+      data: updated,
     };
   }
 }
