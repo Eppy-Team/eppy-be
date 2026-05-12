@@ -123,11 +123,7 @@ export class DashboardRepository {
   }
 
   // List semua tiket untuk tabel dashboard tiket
-  async getAllTickets(
-    page: number,
-    limit: number,
-    status?: TicketStatus,
-  ) {
+  async getAllTickets(page: number, limit: number, status?: TicketStatus) {
     const skip = (page - 1) * limit;
 
     const [tickets, total] = await Promise.all([
@@ -149,5 +145,44 @@ export class DashboardRepository {
     ]);
 
     return { tickets, total };
+  }
+
+  // ─── Report ───────────────────────────────────────────────────────────────
+
+  async getReportData(startDate: Date, endDate: Date) {
+    const [
+      totalConversations,
+      totalMessages,
+      totalTickets,
+      ticketStats,
+      feedbackStats,
+      confidenceStats,
+      confidenceDistribution,
+    ] = await Promise.all([
+      this.prisma.conversation.count({
+        where: { createdAt: { gte: startDate, lte: endDate } },
+      }),
+      this.prisma.message.count({
+        where: { createdAt: { gte: startDate, lte: endDate } },
+      }),
+      this.prisma.ticket.count({
+        where: { createdAt: { gte: startDate, lte: endDate } },
+      }),
+      this.getTicketStats(),
+      this.getFeedbackStats(),
+      this.getConfidenceStats(),
+      this.getConfidenceDistribution(),
+    ]);
+
+    return {
+      period: { startDate, endDate },
+      totalConversations,
+      totalMessages,
+      totalTickets,
+      ticketStats,
+      feedbackStats,
+      confidenceStats,
+      confidenceDistribution,
+    };
   }
 }

@@ -8,7 +8,7 @@ import {
   DefaultValuePipe,
   BadRequestException,
 } from '@nestjs/common';
-import { Response } from 'express';
+import type { Response } from 'express';
 import { TicketStatus } from '@prisma/client';
 import { DashboardService } from './dashboard.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -51,5 +51,51 @@ export class DashboardController {
     @Query('status') status?: TicketStatus,
   ) {
     return this.dashboardService.getTicketDashboard(page, limit, status);
+  }
+
+  /**
+   * GET /dashboard/report/export?startDate=...&endDate=...&format=pdf
+   * Export laporan PDF atau Excel — response adalah file download.
+   */
+  @Get('report/export')
+  async exportReport(
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
+    @Query('format') format: string,
+    @Res() res: Response,
+  ) {
+    if (!startDate || !endDate) {
+      throw new BadRequestException('startDate dan endDate wajib diisi');
+    }
+    if (format !== 'pdf' && format !== 'excel') {
+      throw new BadRequestException('Format harus "pdf" atau "excel"');
+    }
+
+    const { buffer, filename, mimeType } =
+      await this.dashboardService.exportReport(startDate, endDate, format);
+
+    res.set({
+      'Content-Type': mimeType,
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
+
+  /**
+   * GET /dashboard/report?startDate=2026-01-01&endDate=2026-05-01
+   * Data laporan lengkap dalam format JSON.
+   */
+  @Get('report')
+  async getReport(
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
+  ) {
+    if (!startDate || !endDate) {
+      throw new BadRequestException(
+        'startDate dan endDate wajib diisi (format: YYYY-MM-DD)',
+      );
+    }
+    return this.dashboardService.getReport(startDate, endDate);
   }
 }
