@@ -112,22 +112,25 @@ export class DashboardRepository {
    *
    * @param page - Current page number (1-indexed).
    * @param limit - Records per page (e.g., 10, 25, 50).
-   * @param status - Optional filter: 'HELPFUL' or 'NOT_HELPFUL'. Trimmed and validated before use.
+   * @param status - Optional filter: 'HELPFUL' or 'NOT_HELPFUL'. If omitted, includes all.
    * @returns Object with paginated conversations array and total record count.
    *
    * @remarks
    * - Pagination: Offset-based using (page-1)*limit.
    * - Filter Logic: Filters conversations that contain messages with matching feedback status.
-   * - Filter Validation: Status is trimmed and checked for empty string before applying filter.
    * - Enrichment: Includes user info, message count, and last feedback received.
    * - Ordering: Sorted by createdAt descending (newest first).
    */
-  async getAllConversations(page: number, limit: number, status?: string) {
+  async getAllConversations(
+    page: number,
+    limit: number,
+    status?: string,
+  ) {
     const skip = (page - 1) * limit;
-    const feedbackFilter =
-      status && status.trim() !== ''
-        ? { some: { role: 'ASSISTANT' as const, feedback: status as any } }
-        : undefined;
+
+    const feedbackFilter = status
+      ? { some: { role: 'ASSISTANT' as const, feedback: status as any } }
+      : undefined;
 
     const [conversations, total] = await Promise.all([
       this.prisma.conversation.findMany({
@@ -201,12 +204,14 @@ export class DashboardRepository {
       where: { status: TicketStatus.RESOLVED },
       select: { createdAt: true, updatedAt: true },
     });
+
     if (resolvedTickets.length === 0) return 0;
-    const totalMs = resolvedTickets.reduce(
-      (sum, t) => sum + (t.updatedAt.getTime() - t.createdAt.getTime()),
-      0,
-    );
-    return Math.round(totalMs / resolvedTickets.length);
+
+    const totalMs = resolvedTickets.reduce((sum, ticket) => {
+      return sum + (ticket.updatedAt.getTime() - ticket.createdAt.getTime());
+    }, 0);
+
+    return Math.round(totalMs / resolvedTickets.length); 
   }
 
   /**
@@ -228,6 +233,7 @@ export class DashboardRepository {
    */
   async getAllTickets(page: number, limit: number, status?: TicketStatus) {
     const skip = (page - 1) * limit;
+
     const [tickets, total] = await Promise.all([
       this.prisma.ticket.findMany({
         skip,
@@ -245,38 +251,27 @@ export class DashboardRepository {
       }),
       this.prisma.ticket.count({ where: status ? { status } : undefined }),
     ]);
+
     return { tickets, total };
   }
 
   /**
-   * Aggregate comprehensive dashboard data for report generation and exports.
+   * Aggregate comprehensive dashboard data for report generation.
    *
    * Fetches all metrics required for period-based reporting: conversation/message/ticket volumes,
-   * ticket status breakdown, user feedback distribution, AI confidence analysis, and detailed
-   * lists for Excel/PDF export. Executes all sub-queries concurrently for optimal performance.
+   * ticket status breakdown, user feedback distribution, and AI confidence analysis.
+   * Executes all sub-queries concurrently for optimal performance.
    *
    * @param startDate - Report period start date (inclusive).
    * @param endDate - Report period end date (inclusive).
-   * @returns Aggregated report object with counts, statistics, distributions, and detailed data lists.
+   * @returns Aggregated report object with counts, statistics, and distributions.
    *
    * @remarks
-   * Query Breakdown (11 concurrent queries):
-   * - Counts: totalConversations, totalMessages, totalTickets per period.
-   * - Stats: ticketStats (by status), feedbackStats, confidenceStats, confidenceDistribution.
-   * - Performance: avgResponseTimeMs for resolved tickets in period.
-   * - Problematic: problematicConversations (with NOT_HELPFUL feedback).
-   * - Exports: allConversationsForExcel, allTicketsForExcel (full lists for report generation).
-   *
-   * Response Fields:
-   * - period: { startDate, endDate } for audit trail.
-   * - Counts: totalConversations, totalMessages, totalTickets.
-   * - Stats: ticketStats, feedbackStats, confidenceStats, confidenceDistribution.
-   * - Performance: avgResponseTimeMs (milliseconds, converted to HH:MM:SS at service layer).
-   * - Lists: problematicConversations, allConversationsForExcel, allTicketsForExcel.
-   *
-   * Date Range: Filters by createdAt field, inclusive on both bounds.
-   * Concurrency: All 11 sub-queries run in parallel for fast report generation.
-   * Use Case: Report generation, executive dashboards, analytics exports (PDF/Excel).
+   * - Date Range: Filters by createdAt field, inclusive on both bounds.
+   * - Concurrency: All 7 sub-queries (counts, stats, distributions) run in parallel.
+   * - Aggregation: Combines conversation, message, ticket, feedback, and confidence metrics.
+   * - Performance: Optimized for monthly/quarterly reporting; consider caching.
+   * - Use Case: Report generation, executive dashboards, analytics exports (PDF/Excel).
    */
   async getReportData(startDate: Date, endDate: Date) {
     const [
@@ -287,10 +282,6 @@ export class DashboardRepository {
       feedbackStats,
       confidenceStats,
       confidenceDistribution,
-      avgResponseTimeMs,
-      problematicConversations,
-      allConversationsForExcel,
-      allTicketsForExcel,
     ] = await Promise.all([
       this.prisma.conversation.count({
         where: { createdAt: { gte: startDate, lte: endDate } },
@@ -305,55 +296,6 @@ export class DashboardRepository {
       this.getFeedbackStats(),
       this.getConfidenceStats(),
       this.getConfidenceDistribution(),
-      this.getAverageResponseTime(),
-
-      this.prisma.conversation.findMany({
-        where: {
-          createdAt: { gte: startDate, lte: endDate },
-          messages: {
-            some: { role: 'ASSISTANT', feedback: 'NOT_HELPFUL' },
-          },
-        },
-        orderBy: { createdAt: 'desc' },
-        select: {
-          id: true,
-          title: true,
-          createdAt: true,
-          user: { select: { name: true, email: true } },
-          _count: { select: { messages: true } },
-        },
-      }),
-
-      this.prisma.conversation.findMany({
-        where: { createdAt: { gte: startDate, lte: endDate } },
-        orderBy: { createdAt: 'desc' },
-        select: {
-          id: true,
-          title: true,
-          createdAt: true,
-          user: { select: { name: true, email: true } },
-          _count: { select: { messages: true } },
-          messages: {
-            where: { role: 'ASSISTANT', feedback: { not: null } },
-            orderBy: { createdAt: 'desc' },
-            take: 1,
-            select: { feedback: true },
-          },
-        },
-      }),
-
-      this.prisma.ticket.findMany({
-        where: { createdAt: { gte: startDate, lte: endDate } },
-        orderBy: { createdAt: 'desc' },
-        select: {
-          id: true,
-          title: true,
-          status: true,
-          createdAt: true,
-          user: { select: { name: true, email: true } },
-          conversation: { select: { id: true } },
-        },
-      }),
     ]);
 
     return {
@@ -365,10 +307,6 @@ export class DashboardRepository {
       feedbackStats,
       confidenceStats,
       confidenceDistribution,
-      avgResponseTimeMs,
-      problematicConversations,
-      allConversationsForExcel,
-      allTicketsForExcel,
     };
   }
 }
