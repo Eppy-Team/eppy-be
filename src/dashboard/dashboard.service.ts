@@ -72,6 +72,10 @@ export class DashboardService {
    * Performance: Parallel execution of 4 independent queries for fast response.
    */
   async getChatbotDashboard(page: number, limit: number, status?: string) {
+    this.logger.debug(
+      `[chatbot-dashboard] fetching metrics page=${page} limit=${limit} filter=${status ?? 'none'}`,
+    );
+
     const [
       feedbackStats,
       confidenceStats,
@@ -102,6 +106,10 @@ export class DashboardService {
       messageCount: conv._count.messages,
       lastFeedback: conv.messages[0]?.feedback ?? null,
     }));
+
+    this.logger.log(
+      `[chatbot-dashboard] retrieved metrics helpful=${feedbackStats.helpful} notHelpful=${feedbackStats.notHelpful} avg_confidence=${confidenceStats.avg.toFixed(2)} conversations=${conversationsData.total}`,
+    );
 
     return {
       message: 'Chatbot dashboard retrieved successfully',
@@ -147,11 +155,19 @@ export class DashboardService {
    * Performance: Parallel execution of 3 independent queries for fast response.
    */
   async getTicketDashboard(page: number, limit: number, status?: TicketStatus) {
+    this.logger.debug(
+      `[ticket-dashboard] fetching metrics page=${page} limit=${limit} filter=${status ?? 'all'}`,
+    );
+
     const [ticketStats, avgResponseTimeMs, ticketsData] = await Promise.all([
       this.dashboardRepository.getTicketStats(),
       this.dashboardRepository.getAverageResponseTime(),
       this.dashboardRepository.getAllTickets(page, limit, status),
     ]);
+
+    this.logger.log(
+      `[ticket-dashboard] retrieved metrics total=${ticketStats.total} open=${ticketStats.open} onProgress=${ticketStats.onProgress} resolved=${ticketStats.resolved} avgTime=${msToHHMMSS(avgResponseTimeMs)}`,
+    );
 
     return {
       message: 'Ticket dashboard retrieved successfully',
@@ -201,11 +217,16 @@ export class DashboardService {
    * Generated At: Timestamp of report generation for audit trail.
    */
   async getReport(startDate: string, endDate: string) {
+    this.logger.debug(`[report] generating report start_date=${startDate} end_date=${endDate}`);
+
     // [STEP 1] Validate date string format
     const start = new Date(startDate);
     const end = new Date(endDate);
 
     if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      this.logger.warn(
+        `[report] invalid date format start=${startDate} end=${endDate}`,
+      );
       throw new BadRequestException(
         'Format tanggal tidak valid. Gunakan YYYY-MM-DD',
       );
@@ -213,6 +234,9 @@ export class DashboardService {
 
     // [STEP 2] Validate date logic (start <= end)
     if (start > end) {
+      this.logger.warn(
+        `[report] invalid date range start=${start.toISOString()} > end=${end.toISOString()}`,
+      );
       throw new BadRequestException(
         'startDate tidak boleh lebih besar dari endDate',
       );
@@ -222,6 +246,7 @@ export class DashboardService {
     end.setHours(23, 59, 59, 999);
 
     // [STEP 4] Fetch all report data from repository (7 concurrent queries)
+    this.logger.debug(`[report] fetching aggregated metrics for period ${start.toISOString()} to ${end.toISOString()}`);
     const reportData = await this.dashboardRepository.getReportData(start, end);
 
     // [STEP 5] Calculate escalation rate (tickets per conversation)
@@ -234,6 +259,10 @@ export class DashboardService {
         : '0.00';
 
     // [STEP 6] Return report with metadata and all aggregated metrics
+    this.logger.log(
+      `[report] generated report conversations=${reportData.totalConversations} messages=${reportData.totalMessages} tickets=${reportData.totalTickets} escalation_rate=${escalationRate}% feedback_helpful=${reportData.feedbackStats.helpful}`,
+    );
+
     return {
       message: 'Report generated successfully',
       data: {
@@ -274,10 +303,29 @@ export class DashboardService {
     endDate: string,
     format: 'pdf' | 'excel',
   ): Promise<{ buffer: Buffer; filename: string; mimeType: string }> {
+    this.logger.debug(
+      `[export] generating ${format} report start=${startDate} end=${endDate}`,
+    );
+
     const { data: reportData } = await this.getReport(startDate, endDate);
-    return format === 'excel'
-      ? this.generateExcel(reportData)
-      : this.generatePdf(reportData);
+    
+    try {
+      const result = format === 'excel'
+        ? await this.generateExcel(reportData)
+        : await this.generatePdf(reportData);
+
+      this.logger.log(
+        `[export] ${format} report generated filename=${result.filename} size=${result.buffer.length} bytes`,
+      );
+
+      return result;
+    } catch (error) {
+      this.logger.error(
+        `[export] ${format} generation failed`,
+        error instanceof Error ? error.message : String(error),
+      );
+      throw error;
+    }
   }
 
   /**
@@ -312,6 +360,8 @@ export class DashboardService {
     } catch {
       throw new BadRequestException('Jalankan: npm install exceljs');
     }
+
+    this.logger.debug(`[excel] starting workbook generation`);
 
     const workbook = new ExcelJS.Workbook();
     workbook.creator = 'Eppy Helpdesk';
@@ -392,6 +442,8 @@ export class DashboardService {
     ]);
 
     const buffer = await workbook.xlsx.writeBuffer();
+    this.logger.debug(`[excel] workbook generation completed sheets=4 size=${buffer.length} bytes`);
+    
     return {
       buffer: Buffer.from(buffer),
       filename: `eppy-report-${reportData.period.startDate}-${reportData.period.endDate}.xlsx`,
@@ -436,12 +488,20 @@ export class DashboardService {
       );
     }
 
+    this.logger.debug(`[pdf] starting document generation`);
+
     const buffer = await new Promise<Buffer>((resolve, reject) => {
       const doc = new PDFDocument({ margin: 50 });
       const chunks: Buffer[] = [];
       doc.on('data', (chunk: Buffer) => chunks.push(chunk));
-      doc.on('end', () => resolve(Buffer.concat(chunks)));
-      doc.on('error', reject);
+      doc.on('end', () => {
+        this.logger.debug(`[pdf] document generation completed size=${Buffer.concat(chunks).length} bytes`);
+        resolve(Buffer.concat(chunks));
+      });
+      doc.on('error', (err: Error) => {
+        this.logger.error(`[pdf] document generation failed`, err.message);
+        reject(err);
+      });
 
       const addSection = (title: string) => {
         doc.moveDown(1.5).fontSize(14).font('Helvetica-Bold').text(title);
