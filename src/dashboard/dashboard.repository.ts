@@ -112,12 +112,13 @@ export class DashboardRepository {
    *
    * @param page - Current page number (1-indexed).
    * @param limit - Records per page (e.g., 10, 25, 50).
-   * @param status - Optional filter: 'HELPFUL' or 'NOT_HELPFUL'. If omitted, includes all.
+   * @param status - Optional filter: 'HELPFUL' or 'NOT_HELPFUL'. Trimmed and validated before use.
    * @returns Object with paginated conversations array and total record count.
    *
    * @remarks
    * - Pagination: Offset-based using (page-1)*limit.
    * - Filter Logic: Filters conversations that contain messages with matching feedback status.
+   * - Filter Validation: Status is trimmed and checked for empty string before applying filter.
    * - Enrichment: Includes user info, message count, and last feedback received.
    * - Ordering: Sorted by createdAt descending (newest first).
    */
@@ -248,22 +249,34 @@ export class DashboardRepository {
   }
 
   /**
-   * Aggregate comprehensive dashboard data for report generation.
+   * Aggregate comprehensive dashboard data for report generation and exports.
    *
    * Fetches all metrics required for period-based reporting: conversation/message/ticket volumes,
-   * ticket status breakdown, user feedback distribution, and AI confidence analysis.
-   * Executes all sub-queries concurrently for optimal performance.
+   * ticket status breakdown, user feedback distribution, AI confidence analysis, and detailed
+   * lists for Excel/PDF export. Executes all sub-queries concurrently for optimal performance.
    *
    * @param startDate - Report period start date (inclusive).
    * @param endDate - Report period end date (inclusive).
-   * @returns Aggregated report object with counts, statistics, and distributions.
+   * @returns Aggregated report object with counts, statistics, distributions, and detailed data lists.
    *
    * @remarks
-   * - Date Range: Filters by createdAt field, inclusive on both bounds.
-   * - Concurrency: All 7 sub-queries (counts, stats, distributions) run in parallel.
-   * - Aggregation: Combines conversation, message, ticket, feedback, and confidence metrics.
-   * - Performance: Optimized for monthly/quarterly reporting; consider caching.
-   * - Use Case: Report generation, executive dashboards, analytics exports (PDF/Excel).
+   * Query Breakdown (11 concurrent queries):
+   * - Counts: totalConversations, totalMessages, totalTickets per period.
+   * - Stats: ticketStats (by status), feedbackStats, confidenceStats, confidenceDistribution.
+   * - Performance: avgResponseTimeMs for resolved tickets in period.
+   * - Problematic: problematicConversations (with NOT_HELPFUL feedback).
+   * - Exports: allConversationsForExcel, allTicketsForExcel (full lists for report generation).
+   *
+   * Response Fields:
+   * - period: { startDate, endDate } for audit trail.
+   * - Counts: totalConversations, totalMessages, totalTickets.
+   * - Stats: ticketStats, feedbackStats, confidenceStats, confidenceDistribution.
+   * - Performance: avgResponseTimeMs (milliseconds, converted to HH:MM:SS at service layer).
+   * - Lists: problematicConversations, allConversationsForExcel, allTicketsForExcel.
+   *
+   * Date Range: Filters by createdAt field, inclusive on both bounds.
+   * Concurrency: All 11 sub-queries run in parallel for fast report generation.
+   * Use Case: Report generation, executive dashboards, analytics exports (PDF/Excel).
    */
   async getReportData(startDate: Date, endDate: Date) {
     const [

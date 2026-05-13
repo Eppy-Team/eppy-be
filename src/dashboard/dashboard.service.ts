@@ -125,12 +125,12 @@ export class DashboardService {
    * Retrieve chatbot performance dashboard with metrics and conversation data.
    *
    * Aggregates user satisfaction metrics (feedback distribution), AI confidence statistics,
-   * and paginated conversation list. Supports filtering by feedback status.
+   * bot accuracy assessment, and paginated conversation list. Supports filtering by feedback status.
    *
    * @param page - Current page number (1-indexed, default: 1).
    * @param limit - Records per page (default: 10).
    * @param status - Optional feedback filter: 'HELPFUL' or 'NOT_HELPFUL'.
-   * @returns Dashboard object with satisfaction metrics, confidence data, and conversations list.
+   * @returns Dashboard object with satisfaction metrics, confidence data, bot accuracy warning, and conversations list.
    *
    * @status 200 OK
    * @remarks
@@ -138,11 +138,21 @@ export class DashboardService {
    * - Satisfaction Chart: Helpful/not-helpful counts with percentage calculation.
    * - Confidence Score: Average, minimum, maximum (4 decimal precision).
    * - Confidence Distribution: Counts in low/medium/high brackets.
+   * - Bot Accuracy: Assessment with status (LOW/MEDIUM/HIGH) and warning message.
    * - Conversations: Paginated with user info and last feedback status.
+   *
+   * Bot Accuracy Status:
+   * - LOW (< 0.5): "Bot butuh pelatihan data lebih lanjut"
+   * - MEDIUM (0.5-0.7): "Performa bot cukup, masih bisa dioptimasi"
+   * - HIGH (≥ 0.7): "Performa bot baik"
    *
    * Performance: Parallel execution of 4 independent queries for fast response.
    */
   async getChatbotDashboard(page: number, limit: number, status?: string) {
+    this.logger.debug(
+      `[chatbot-dashboard] fetching metrics page=${page} limit=${limit} filter=${status ?? 'none'}`,
+    );
+
     const [
       feedbackStats,
       confidenceStats,
@@ -187,6 +197,10 @@ export class DashboardService {
       lastFeedback: conv.messages[0]?.feedback ?? null,
     }));
 
+    this.logger.log(
+      `[chatbot-dashboard] retrieved metrics helpful=${feedbackStats.helpful} notHelpful=${feedbackStats.notHelpful} avg_confidence=${confidenceStats.avg.toFixed(2)} bot_status=${botAccuracy.status} conversations=${conversationsData.total}`,
+    );
+
     return {
       message: 'Chatbot dashboard retrieved successfully',
       data: {
@@ -230,13 +244,22 @@ export class DashboardService {
    * - AvgResponseTime: Mean time-to-resolution (HH:MM:SS format).
    *
    * Performance: Parallel execution of 3 independent queries for fast response.
+   * Logging: debug (entry), log (success with ticket_counts and avg_response_time).
    */
   async getTicketDashboard(page: number, limit: number, status?: TicketStatus) {
+    this.logger.debug(
+      `[ticket-dashboard] fetching metrics page=${page} limit=${limit} filter=${status ?? 'all'}`,
+    );
+
     const [ticketStats, avgResponseTimeMs, ticketsData] = await Promise.all([
       this.dashboardRepository.getTicketStats(),
       this.dashboardRepository.getAverageResponseTime(),
       this.dashboardRepository.getAllTickets(page, limit, status),
     ]);
+
+    this.logger.log(
+      `[ticket-dashboard] retrieved metrics total=${ticketStats.total} open=${ticketStats.open} onProgress=${ticketStats.onProgress} resolved=${ticketStats.resolved} avg_response_time=${msToHHMMSS(avgResponseTimeMs)} tickets=${ticketsData.total}`,
+    );
 
     return {
       message: 'Ticket dashboard retrieved successfully',
@@ -275,32 +298,52 @@ export class DashboardService {
    *
    * @remarks
    * Flow:
-   * 1. Validate date string format (YYYY-MM-DD).
-   * 2. Validate date logic (start <= end).
-   * 3. Normalize end date to 23:59:59.999 for inclusive range.
-   * 4. Fetch all report data from repository (7 concurrent queries).
-   * 5. Calculate escalation rate (tickets per conversation).
-   * 6. Return report with metadata and all aggregated metrics.
+   * [STEP 1] Validate date string format (YYYY-MM-DD).
+   * [STEP 2] Validate date logic (start <= end).
+   * [STEP 3] Normalize end date to 23:59:59.999 for inclusive range.
+   * [STEP 4] Fetch all report data from repository (11 concurrent queries).
+   * [STEP 5] Calculate escalation rate (tickets per conversation).
+   * [STEP 6] Convert avgResponseTimeMs to HH:MM:SS format.
+   * [STEP 7] Return report with metadata and all aggregated metrics.
+   *
+   * Response Fields:
+   * - period: { startDate, endDate } for audit trail.
+   * - Counts: totalConversations, totalMessages, totalTickets, escalationRate.
+   * - Stats: ticketStats, feedbackStats, confidenceStats, confidenceDistribution.
+   * - Performance: avgResponseTime (HH:MM:SS format), avgResponseTimeMs (raw).
+   * - Lists: problematicConversations, allConversationsForExcel, allTicketsForExcel.
+   * - generatedAt: ISO timestamp of report generation.
    *
    * Escalation Rate: (totalTickets / totalConversations) * 100 (percentage).
-   * Generated At: Timestamp of report generation for audit trail.
    */
   async getReport(startDate: string, endDate: string) {
+    this.logger.debug(`[getReport] generating report start_date=${startDate} end_date=${endDate}`);
+
     const start = new Date(startDate);
     const end = new Date(endDate);
     if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      this.logger.warn(
+        `[getReport] invalid date format start=${startDate} end=${endDate}`,
+      );
       throw new BadRequestException(
         'Format tanggal tidak valid. Gunakan YYYY-MM-DD',
       );
     }
     if (start > end) {
+      this.logger.warn(
+        `[getReport] invalid date range start=${start.toISOString()} > end=${end.toISOString()}`,
+      );
       throw new BadRequestException(
         'startDate tidak boleh lebih besar dari endDate',
       );
     }
     end.setHours(23, 59, 59, 999);
 
+    this.logger.debug(
+      `[getReport] fetching aggregated metrics for period ${start.toISOString()} to ${end.toISOString()}`,
+    );
     const reportData = await this.dashboardRepository.getReportData(start, end);
+    
     const escalationRate =
       reportData.totalConversations > 0
         ? (
@@ -308,6 +351,10 @@ export class DashboardService {
             100
           ).toFixed(2)
         : '0.00';
+
+    this.logger.log(
+      `[getReport] generated report conversations=${reportData.totalConversations} messages=${reportData.totalMessages} tickets=${reportData.totalTickets} escalation_rate=${escalationRate}% feedback_helpful=${reportData.feedbackStats.helpful} problematic_convs=${reportData.problematicConversations.length}`,
+    );
 
     return {
       message: 'Report generated successfully',
@@ -335,25 +382,34 @@ export class DashboardService {
    *
    * @remarks
    * Flow:
-   * 1. Call getReport() to validate dates and fetch aggregated data.
-   * 2. Route to format-specific generator (generateExcel or generatePdf).
-   * 3. Return binary buffer with appropriate HTTP headers metadata.
+   * [STEP 1] Call getReport() to validate dates and fetch aggregated data.
+   * [STEP 2] Route to format-specific generator (generateExcel or generatePdf).
+   * [STEP 3] Return binary buffer with appropriate HTTP headers metadata.
    *
    * File Format:
    * - Excel: Multi-sheet workbook (Overview, Kepuasan User, Performa Chatbot, Status Tiket).
    * - PDF: Single document with all metrics and charts.
    *
    * Dependencies: exceljs (for Excel), pdfkit or similar (for PDF).
+   * Logging: debug (entry), log (success with filename/size), error (export failure).
    */
   async exportReport(
     startDate: string,
     endDate: string,
     format: 'pdf' | 'excel',
   ): Promise<{ buffer: Buffer; filename: string; mimeType: string }> {
+    this.logger.debug(`[exportReport] exporting report format=${format} start_date=${startDate} end_date=${endDate}`);
     const { data: reportData } = await this.getReport(startDate, endDate);
-    return format === 'excel'
-      ? this.generateExcel(reportData)
-      : this.generatePdf(reportData);
+    
+    const result = format === 'excel'
+      ? await this.generateExcel(reportData)
+      : await this.generatePdf(reportData);
+    
+    this.logger.log(
+      `[exportReport] report exported format=${format} filename=${result.filename} size_bytes=${result.buffer.length}`,
+    );
+    
+    return result;
   }
 
   /**
@@ -368,20 +424,34 @@ export class DashboardService {
    * @throws {BadRequestException} If ExcelJS package is not installed.
    *
    * @remarks
-   * Sheet Structure:
-   * 1. Overview: Period range, conversation/message/ticket counts, escalation rate.
-   * 2. Kepuasan User (User Satisfaction): Feedback counts (helpful/not helpful).
-   * 3. Performa Chatbot (Chatbot Performance): Confidence stats and distribution.
-   * 4. Status Tiket (Ticket Status): Ticket status breakdown.
+   * Flow:
+   * [STEP 1] Import ExcelJS package (throw if not installed).
+   * [STEP 2] Create workbook with metadata (creator, timestamp).
+   * [STEP 3] Add Sheet 1 (Ringkasan): Period range, aggregated counts, response time, feedback, confidence stats.
+   * [STEP 4] Add Sheet 2 (Daftar Percakapan): Conversations table with feedback status, conditional colors, hyperlinks.
+   * [STEP 5] Add Sheet 3 (Daftar Tiket): Tickets table with status breakdown, color-coding, quick links.
+   * [STEP 6] Freeze header rows on all sheets for navigation.
+   * [STEP 7] Serialize to Buffer and generate filename.
+   * [STEP 8] Return buffer, filename, and Excel MIME type.
    *
-   * Formatting: Bold headers, fixed column widths, date formatting.
-   * Filename: report_<startDate>_<endDate>.xlsx.
+   * Sheet Structure:
+   * 1. Ringkasan: Period range, conversation/message/ticket counts, escalation rate.
+   * 2. Daftar Percakapan: Paginated conversations with feedback metadata.
+   * 3. Daftar Tiket: Paginated tickets with status breakdown.
+   *
+   * Formatting: Bold headers, fixed column widths, date formatting, conditional row colors.
+   * Color Scheme: Blue (#1D4ED8) headers, red/green/yellow status indicators.
+   * Filename: Eppy_Report_<Period>.xlsx (Indonesian month names).
+   * 
+   * Logging: debug (start), debug (workbook_generated with sheet_count and file_size).
    */
   private async generateExcel(reportData: any): Promise<{
     buffer: Buffer;
     filename: string;
     mimeType: string;
   }> {
+    this.logger.debug(`[generateExcel] starting Excel export for ${reportData.allConversationsForExcel?.length ?? 0} conversations and ${reportData.allTicketsForExcel?.length ?? 0} tickets`);
+    
     let ExcelJS: any;
     try {
       ExcelJS = (await import('exceljs')).default;
@@ -621,8 +691,13 @@ export class DashboardService {
       'xlsx',
     );
 
+    const finalBuffer = Buffer.from(buffer);
+    this.logger.debug(
+      `[generateExcel] workbook generated sheet_count=3 file_size_bytes=${finalBuffer.length}`,
+    );
+
     return {
-      buffer: Buffer.from(buffer),
+      buffer: finalBuffer,
       filename,
       mimeType:
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -641,15 +716,31 @@ export class DashboardService {
    * @throws {BadRequestException} If PDFKit package is not installed.
    *
    * @remarks
+   * Flow:
+   * [STEP 1] Import PDFKit package (throw if not installed).
+   * [STEP 2] Create PDF document with A4 size and 50px margins.
+   * [STEP 3] Set up event listeners (data/end/error) for buffer collection.
+   * [STEP 4] Render header section with report title and period.
+   * [STEP 5] Render Section 1: System Overview (conversation/message/ticket counts, escalation rate, response time SLA).
+   * [STEP 6] Render Section 2: User Satisfaction (feedback distribution with percentages).
+   * [STEP 7] Render Section 3: Chatbot Performance (confidence stats and distribution breakdown).
+   * [STEP 8] Render Section 4: Ticket Management (status breakdown with color indicators).
+   * [STEP 9] Generate filename and return buffer.
+   * [STEP 10] Close document to trigger 'end' event and resolve promise.
+   *
    * Content Structure:
-   * - Header: Report title, period, and generation timestamp.
+   * - Header: Report title, period, and generation timestamp (blue banner).
    * - Section 1: System Overview (conversations, messages, tickets, escalation rate).
    * - Section 2: User Satisfaction (feedback distribution with percentages).
    * - Section 3: Chatbot Performance (confidence metrics and distribution).
    * - Section 4: Ticket Management (status breakdown and metrics).
    *
-   * Formatting: Formatted text, tables, page breaks, timestamps.
-   * Filename: report_<startDate>_<endDate>.pdf.
+   * Formatting: Formatted text, colored sections, page breaks, timestamps.
+   * Color Scheme: Blue (#1D4ED8) headers, red/green/yellow status indicators.
+   * Filename: Eppy_Report_<Period>.pdf (Indonesian month names).
+   * Page Layout: A4, 50px margins, width 495px for content.
+   *
+   * Logging: debug (start), debug (pdf_generated with file_size_bytes), error (doc generation error).
    */
   private async generatePdf(reportData: any): Promise<{
     buffer: Buffer;
@@ -665,12 +756,21 @@ export class DashboardService {
       );
     }
 
+    this.logger.debug(`[generatePdf] starting PDF export`);
+
     const buffer = await new Promise<Buffer>((resolve, reject) => {
       const doc = new PDFDocument({ margin: 50, size: 'A4' });
       const chunks: Buffer[] = [];
       doc.on('data', (chunk: Buffer) => chunks.push(chunk));
-      doc.on('end', () => resolve(Buffer.concat(chunks)));
-      doc.on('error', reject);
+      doc.on('end', () => {
+        const finalBuffer = Buffer.concat(chunks);
+        this.logger.debug(`[generatePdf] pdf_generated file_size_bytes=${finalBuffer.length}`);
+        resolve(finalBuffer);
+      });
+      doc.on('error', (err) => {
+        this.logger.error(`[generatePdf] doc generation error: ${err.message}`, err.stack);
+        reject(err);
+      });
 
       const PAGE_WIDTH = 495; // A4 - margin kiri kanan
       const BLUE = '#1d4ed8';
@@ -929,6 +1029,7 @@ export class DashboardService {
       new Date(reportData.period.endDate),
       'pdf',
     );
+    
     return { buffer, filename, mimeType: 'application/pdf' };
   }
 }
