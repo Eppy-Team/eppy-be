@@ -5,6 +5,7 @@ import { KnowledgeModule } from './knowledge/knowledge.module';
 import { ConversationModule } from './conversation/conversation.module';
 import { ChatModule } from './chat/chat.module';
 import { TicketModule } from './ticket/ticket.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { ConfigModule } from '@nestjs/config';
 import * as Joi from 'joi';
 
@@ -38,6 +39,7 @@ import * as Joi from 'joi';
     ConversationModule,
     ChatModule,
     TicketModule,
+    DashboardModule,
   ],
 })
 export class AppModule {}
