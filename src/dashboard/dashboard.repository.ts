@@ -121,16 +121,12 @@ export class DashboardRepository {
    * - Enrichment: Includes user info, message count, and last feedback received.
    * - Ordering: Sorted by createdAt descending (newest first).
    */
-  async getAllConversations(
-    page: number,
-    limit: number,
-    status?: string,
-  ) {
+  async getAllConversations(page: number, limit: number, status?: string) {
     const skip = (page - 1) * limit;
-
-    const feedbackFilter = status
-      ? { some: { role: 'ASSISTANT' as const, feedback: status as any } }
-      : undefined;
+    const feedbackFilter =
+      status && status.trim() !== ''
+        ? { some: { role: 'ASSISTANT' as const, feedback: status as any } }
+        : undefined;
 
     const [conversations, total] = await Promise.all([
       this.prisma.conversation.findMany({
@@ -204,14 +200,12 @@ export class DashboardRepository {
       where: { status: TicketStatus.RESOLVED },
       select: { createdAt: true, updatedAt: true },
     });
-
     if (resolvedTickets.length === 0) return 0;
-
-    const totalMs = resolvedTickets.reduce((sum, ticket) => {
-      return sum + (ticket.updatedAt.getTime() - ticket.createdAt.getTime());
-    }, 0);
-
-    return Math.round(totalMs / resolvedTickets.length); 
+    const totalMs = resolvedTickets.reduce(
+      (sum, t) => sum + (t.updatedAt.getTime() - t.createdAt.getTime()),
+      0,
+    );
+    return Math.round(totalMs / resolvedTickets.length);
   }
 
   /**
@@ -233,7 +227,6 @@ export class DashboardRepository {
    */
   async getAllTickets(page: number, limit: number, status?: TicketStatus) {
     const skip = (page - 1) * limit;
-
     const [tickets, total] = await Promise.all([
       this.prisma.ticket.findMany({
         skip,
@@ -251,7 +244,6 @@ export class DashboardRepository {
       }),
       this.prisma.ticket.count({ where: status ? { status } : undefined }),
     ]);
-
     return { tickets, total };
   }
 
@@ -282,6 +274,10 @@ export class DashboardRepository {
       feedbackStats,
       confidenceStats,
       confidenceDistribution,
+      avgResponseTimeMs,
+      problematicConversations,
+      allConversationsForExcel,
+      allTicketsForExcel,
     ] = await Promise.all([
       this.prisma.conversation.count({
         where: { createdAt: { gte: startDate, lte: endDate } },
@@ -296,6 +292,55 @@ export class DashboardRepository {
       this.getFeedbackStats(),
       this.getConfidenceStats(),
       this.getConfidenceDistribution(),
+      this.getAverageResponseTime(),
+
+      this.prisma.conversation.findMany({
+        where: {
+          createdAt: { gte: startDate, lte: endDate },
+          messages: {
+            some: { role: 'ASSISTANT', feedback: 'NOT_HELPFUL' },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          title: true,
+          createdAt: true,
+          user: { select: { name: true, email: true } },
+          _count: { select: { messages: true } },
+        },
+      }),
+
+      this.prisma.conversation.findMany({
+        where: { createdAt: { gte: startDate, lte: endDate } },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          title: true,
+          createdAt: true,
+          user: { select: { name: true, email: true } },
+          _count: { select: { messages: true } },
+          messages: {
+            where: { role: 'ASSISTANT', feedback: { not: null } },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: { feedback: true },
+          },
+        },
+      }),
+
+      this.prisma.ticket.findMany({
+        where: { createdAt: { gte: startDate, lte: endDate } },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          createdAt: true,
+          user: { select: { name: true, email: true } },
+          conversation: { select: { id: true } },
+        },
+      }),
     ]);
 
     return {
@@ -307,6 +352,10 @@ export class DashboardRepository {
       feedbackStats,
       confidenceStats,
       confidenceDistribution,
+      avgResponseTimeMs,
+      problematicConversations,
+      allConversationsForExcel,
+      allTicketsForExcel,
     };
   }
 }
