@@ -15,16 +15,20 @@ function msToHHMMSS(ms: number): string {
 
 function formatDateID(date: Date | string): string {
   const d = new Date(date);
+  
+  const wibOffset = 7 * 60 * 60 * 1000;
+  const wib = new Date(d.getTime() + wibOffset);
+
   const months = [
     'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
     'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
   ];
-  const day = d.getDate();
-  const month = months[d.getMonth()];
-  const year = d.getFullYear();
-  const hours = String(d.getHours()).padStart(2, '0');
-  const minutes = String(d.getMinutes()).padStart(2, '0');
-  return `${day} ${month} ${year}, ${hours}:${minutes}`;
+  const day = wib.getUTCDate();
+  const month = months[wib.getUTCMonth()];
+  const year = wib.getUTCFullYear();
+  const hours = String(wib.getUTCHours()).padStart(2, '0');
+  const minutes = String(wib.getUTCMinutes()).padStart(2, '0');
+  return `${day} ${month} ${year}, ${hours}:${minutes} WIB`;
 }
 
 function formatReportFilename(startDate: Date, endDate: Date, ext: string): string {
@@ -449,7 +453,7 @@ export class DashboardService {
       doc.moveDown(0.4);
       doc.fontSize(8).font('Helvetica').fillColor(GRAY)
         .text(
-          'Dokumen ini dibuat otomatis oleh sistem Eppy. Hak Cipta 2026 PT Epson Indonesia Industry.',
+          'Dokumen ini dibuat otomatis oleh sistem Eppy | © 2026 PT Epson Indonesia. All rights reserved.',
           LEFT, doc.y, { width: WIDTH, align: 'center' },
         );
 
