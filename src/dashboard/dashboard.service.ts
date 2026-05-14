@@ -3,8 +3,20 @@ import { TicketStatus } from '@prisma/client';
 import { DashboardRepository } from './dashboard.repository';
 import { AiService } from '../ai/ai.service';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Convert milliseconds to HH:MM:SS format.
+ *
+ * @param ms - Time duration in milliseconds.
+ * @returns Formatted string (e.g., "02:34:56").
+ *
+ * @remarks
+ * Used for converting average response times and other duration metrics
+ * from raw milliseconds to human-readable time format.
+ */
 function msToHHMMSS(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000);
   const hours = Math.floor(totalSeconds / 3600);
@@ -13,6 +25,18 @@ function msToHHMMSS(ms: number): string {
   return [hours, minutes, seconds].map((v) => String(v).padStart(2, '0')).join(':');
 }
 
+/**
+ * Format date to Indonesian locale with WIB timezone.
+ *
+ * @param date - Date object or ISO string to format.
+ * @returns Formatted string (e.g., "14 Mei 2026, 10:30 WIB").
+ *
+ * @remarks
+ * - Applies WIB timezone offset (+07:00) to UTC date.
+ * - Uses Indonesian month names.
+ * - Includes time component (HH:MM format) with WIB suffix.
+ * - Used in PDF headers, Excel cells, and report formatting.
+ */
 function formatDateID(date: Date | string): string {
   const d = new Date(date);
   
@@ -31,6 +55,20 @@ function formatDateID(date: Date | string): string {
   return `${day} ${month} ${year}, ${hours}:${minutes} WIB`;
 }
 
+/**
+ * Format report filename with period range.
+ *
+ * @param startDate - Report period start date.
+ * @param endDate - Report period end date.
+ * @param ext - File extension ('xlsx' or 'pdf').
+ * @returns Formatted filename (e.g., "Eppy_Report_Januari_2026.xlsx").
+ *
+ * @remarks
+ * - Uses Indonesian month names.
+ * - If start and end in same month/year, uses single month format.
+ * - Otherwise uses range format: Januari_2026-Mei_2026.
+ * - Filename prefix: "Eppy_Report_".
+ */
 function formatReportFilename(startDate: Date, endDate: Date, ext: string): string {
   const months = [
     'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -47,12 +85,30 @@ function formatReportFilename(startDate: Date, endDate: Date, ext: string): stri
   return `Eppy_Report_${periodLabel}.${ext}`;
 }
 
+/**
+ * Convert feedback enum value to Indonesian label.
+ *
+ * @param feedback - Feedback value ('HELPFUL', 'NOT_HELPFUL', or null).
+ * @returns Indonesian label: 'Puas', 'Tidak Puas', or '-' for null.
+ *
+ * @remarks
+ * Used in Excel and PDF report generation for feedback display.
+ */
 function feedbackLabel(feedback: string | null): string {
   if (feedback === 'HELPFUL') return 'Puas';
   if (feedback === 'NOT_HELPFUL') return 'Tidak Puas';
   return '-';
 }
 
+/**
+ * Convert ticket status enum value to Indonesian label.
+ *
+ * @param status - Ticket status string ('OPEN', 'ON_PROGRESS', 'RESOLVED').
+ * @returns Indonesian label: 'Baru', 'Aktif', 'Selesai', or original status if unmapped.
+ *
+ * @remarks
+ * Used in Excel and PDF report generation for ticket status display.
+ */
 function statusLabel(status: string): string {
   const map: Record<string, string> = {
     OPEN: 'Baru',
@@ -71,8 +127,34 @@ export class DashboardService {
     private readonly aiService: AiService,
   ) {}
 
-  // ─── GET /dashboard/chatbot ───────────────────────────────────────────────
-
+  /**
+   * Retrieve chatbot performance dashboard with metrics and conversation data.
+   *
+   * Aggregates user satisfaction metrics (feedback distribution), AI confidence statistics,
+   * bot accuracy assessment, and paginated conversation list. Supports filtering by feedback status.
+   *
+   * @param page - Current page number (1-indexed, default: 1).
+   * @param limit - Records per page (default: 10).
+   * @param status - Optional feedback filter: 'HELPFUL' or 'NOT_HELPFUL'.
+   * @returns Dashboard object with satisfaction metrics, confidence data, bot accuracy warning, and conversations list.
+   *
+   * @status 200 OK
+   * @remarks
+   * Metrics Aggregation:
+   * - Satisfaction Chart: Helpful/not-helpful counts with percentage calculation.
+   * - Confidence Score: Average, minimum, maximum (4 decimal precision).
+   * - Confidence Distribution: Counts in low/medium/high brackets.
+   * - Bot Accuracy: Assessment with status (LOW/MEDIUM/HIGH) and warning message.
+   * - Conversations: Paginated with user info and last feedback status.
+   *
+   * Bot Accuracy Status:
+   * - LOW (< 0.5): "Bot butuh pelatihan data lebih lanjut"
+   * - MEDIUM (0.5-0.7): "Performa bot cukup, masih bisa dioptimasi"
+   * - HIGH (≥ 0.7): "Performa bot baik"
+   *
+   * Performance: Parallel execution of 4 independent queries for fast response.
+   * Logging: debug (entry), log (success with helpful_count, avg_confidence, total_conversations).
+   */
   async getChatbotDashboard(page: number, limit: number, status?: string) {
     const [feedbackStats, confidenceStats, confidenceDistribution, conversationsData] =
       await Promise.all([
@@ -135,8 +217,29 @@ export class DashboardService {
     };
   }
 
-  // ─── GET /dashboard/tickets ───────────────────────────────────────────────
-
+  /**
+   * Retrieve ticket management dashboard with SLA metrics and queue status.
+   *
+   * Aggregates ticket counts by status, calculates average response time, and provides
+   * paginated ticket list with optional status filtering.
+   *
+   * @param page - Current page number (1-indexed, default: 1).
+   * @param limit - Records per page (default: 10).
+   * @param status - Optional status filter: TicketStatus.OPEN, ON_PROGRESS, or RESOLVED.
+   * @returns Dashboard object with ticket summary, SLA metrics, and paginated ticket list.
+   *
+   * @status 200 OK
+   * @remarks
+   * Summary Metrics:
+   * - Total: All tickets across all statuses.
+   * - Open: TicketStatus.OPEN queue count.
+   * - OnProgress: TicketStatus.ON_PROGRESS queue count.
+   * - Resolved: TicketStatus.RESOLVED completed count.
+   * - AvgResponseTime: Mean time-to-resolution (HH:MM:SS format).
+   *
+   * Performance: Parallel execution of 3 independent queries for fast response.
+   * Logging: debug (entry), log (success with ticket_counts and avg_response_time).
+   */
   async getTicketDashboard(page: number, limit: number, status?: TicketStatus) {
     const [ticketStats, avgResponseTimeMs, ticketsData] = await Promise.all([
       this.dashboardRepository.getTicketStats(),
@@ -165,8 +268,40 @@ export class DashboardService {
     };
   }
 
-  // ─── GET /dashboard/report ────────────────────────────────────────────────
-
+  /**
+   * Generate comprehensive system report for a date range.
+   *
+   * Aggregates all dashboard metrics (conversations, messages, tickets, feedback, confidence)
+   * for a specified period and calculates escalation rate (ticket/conversation ratio).
+   * Serves as data source for report export and executive dashboards.
+   *
+   * @param startDate - Report period start (format: YYYY-MM-DD, inclusive).
+   * @param endDate - Report period end (format: YYYY-MM-DD, inclusive).
+   * @returns Comprehensive report object with period metadata and aggregated metrics.
+   *
+   * @status 200 OK
+   * @throws {BadRequestException} If date format is invalid or startDate > endDate.
+   *
+   * @remarks
+   * Flow:
+   * [STEP 1] Validate date string format (YYYY-MM-DD).
+   * [STEP 2] Validate date logic (start <= end).
+   * [STEP 3] Normalize end date to 23:59:59.999 for inclusive range.
+   * [STEP 4] Fetch all report data from repository (11 concurrent queries).
+   * [STEP 5] Calculate escalation rate (tickets per conversation).
+   * [STEP 6] Convert avgResponseTimeMs to HH:MM:SS format.
+   * [STEP 7] Return report with metadata and all aggregated metrics.
+   *
+   * Response Fields:
+   * - period: { startDate, endDate } for audit trail.
+   * - Counts: totalConversations, totalMessages, totalTickets, escalationRate.
+   * - Stats: ticketStats, feedbackStats, confidenceStats, confidenceDistribution.
+   * - Performance: avgResponseTime (HH:MM:SS format), avgResponseTimeMs (raw).
+   * - Lists: problematicConversations, allConversationsForExcel, allTicketsForExcel.
+   * - generatedAt: ISO timestamp of report generation.
+   *
+   * Escalation Rate: (totalTickets / totalConversations) * 100 (percentage).
+   */
   async getReport(startDate: string, endDate: string) {
     const start = new Date(startDate);
     const end = new Date(endDate);
@@ -195,8 +330,32 @@ export class DashboardService {
     };
   }
 
-  // ─── GET /dashboard/report/export ─────────────────────────────────────────
-
+  /**
+   * Export system report in specified format (PDF or Excel).
+   *
+   * Generates period-based report data and converts it to the requested file format.
+   * Returns binary buffer and metadata for file download via HTTP response.
+   *
+   * @param startDate - Report period start (format: YYYY-MM-DD).
+   * @param endDate - Report period end (format: YYYY-MM-DD).
+   * @param format - Export format: 'pdf' or 'excel'.
+   * @returns Object with buffer (file content), filename, and mimeType for HTTP download.
+   *
+   * @throws {BadRequestException} If date validation fails or required packages are missing.
+   *
+   * @remarks
+   * Flow:
+   * [STEP 1] Call getReport() to validate dates and fetch aggregated data.
+   * [STEP 2] Route to format-specific generator (generateExcel or generatePdf).
+   * [STEP 3] Return binary buffer with appropriate HTTP headers metadata.
+   *
+   * File Format:
+   * - Excel: Multi-sheet workbook (Ringkasan, Daftar Percakapan, Daftar Tiket).
+   * - PDF: Single document with all metrics and formatted sections.
+   *
+   * Dependencies: exceljs (for Excel), pdfkit (for PDF).
+   * Logging: debug (entry), log (success with filename/size), error (export failure).
+   */
   async exportReport(
     startDate: string,
     endDate: string,
@@ -206,8 +365,49 @@ export class DashboardService {
     return format === 'excel' ? this.generateExcel(reportData) : this.generatePdf(reportData);
   }
 
-  // ─── Private: PDF ─────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────────
+  // PRIVATE: PDF GENERATION
+  // ─────────────────────────────────────────────────────────────────────────────
 
+  /**
+   * Private: Generate PDF document from report data.
+   *
+   * Creates a formatted PDF document containing all report metrics: overview, user satisfaction,
+   * chatbot performance, and ticket management statistics. Uses PDFKit library for generation.
+   *
+   * @param reportData - Aggregated report data object (output from getReportData).
+   * @returns Object with buffer (file content), filename, and mimeType for download.
+   *
+   * @throws {BadRequestException} If PDFKit package is not installed.
+   *
+   * @remarks
+   * Flow:
+   * [STEP 1] Import PDFKit package (throw if not installed).
+   * [STEP 2] Create PDF document with A4 size and 50px margins.
+   * [STEP 3] Set up event listeners (data/end/error) for buffer collection.
+   * [STEP 4] Render header section with report title and period.
+   * [STEP 5] Render Section 1: System Overview (conversation/message/ticket counts, escalation rate, response time SLA).
+   * [STEP 6] Render Section 2: User Satisfaction (feedback distribution with percentages).
+   * [STEP 7] Render Section 3: Chatbot Performance (confidence stats and distribution breakdown).
+   * [STEP 8] Render Section 4: Ticket Management (status breakdown with color indicators).
+   * [STEP 9] Render Section 5: Problematic Conversations (with negative feedback).
+   * [STEP 10] Close document to trigger 'end' event and resolve promise.
+   *
+   * Content Structure:
+   * - Header: Report title, period, and generation timestamp (blue banner).
+   * - Section 1: System Overview (conversations, messages, tickets, escalation rate).
+   * - Section 2: User Satisfaction (feedback distribution with percentages).
+   * - Section 3: Chatbot Performance (confidence metrics and distribution).
+   * - Section 4: Ticket Management (status breakdown and metrics).
+   * - Section 5: Problematic Conversations (NOT_HELPFUL conversations list).
+   *
+   * Formatting: Formatted text, colored sections, page breaks, timestamps.
+   * Color Scheme: Blue (#1D4ED8) headers, red/green/yellow status indicators.
+   * Filename: Eppy_Report_<Period>.pdf (Indonesian month names).
+   * Page Layout: A4, 50px margins, width 495px for content.
+   *
+   * Logging: debug (start), debug (pdf_generated with file_size_bytes), error (doc generation error).
+   */
   private async generatePdf(reportData: any): Promise<{
     buffer: Buffer;
     filename: string;
@@ -262,7 +462,6 @@ export class DashboardService {
 
       // ─── Header ────────────────────────────────────────────────────────
 
-      // Background biru
       doc.rect(LEFT, 45, WIDTH, 65).fill(BLUE);
 
       doc.fillColor('white').fontSize(20).font('Helvetica-Bold')
@@ -271,7 +470,6 @@ export class DashboardService {
       doc.fontSize(10).font('Helvetica').fillColor('#bfdbfe')
         .text('Laporan Analisis Sistem', LEFT + 12, 78, { width: WIDTH - 24 });
 
-      // Tanggal di kanan atas header
       doc.fontSize(9).fillColor('white')
         .text(
           `Periode: ${formatDateID(reportData.period.startDate)} — ${formatDateID(reportData.period.endDate)}`,
@@ -284,7 +482,7 @@ export class DashboardService {
           width: WIDTH, align: 'right',
         });
 
-      // ─── Section 1: Ringkasan Umum ─────────────────────────────────────
+      // ─── Section 1: Overview ─────────────────────────────────────
 
       sectionTitle('1.  Ringkasan Umum');
       labelValue('Total Percakapan', String(reportData.totalConversations));
@@ -302,11 +500,10 @@ export class DashboardService {
         .text(reportData.avgResponseTime ?? '00:00:00', LEFT + 12, slaY + 19, { width: WIDTH - 24 });
       doc.y = slaY + 44;
 
-      // ─── Section 2: Kepuasan User ──────────────────────────────────────
+      // ─── Section 2: User Satisfaction ──────────────────────────────────────
 
       sectionTitle('2.  Kepuasan User');
 
-      // fix: gunakan feedbackStats.total bukan totalFeedback
       const fb = reportData.feedbackStats;
       const totalFb = fb.total ?? 0;
       const helpfulRate = totalFb > 0
@@ -318,7 +515,7 @@ export class DashboardService {
       labelValue('Tidak Puas (Not Helpful)', String(fb.notHelpful), RED);
       labelValue('Tingkat Kepuasan', helpfulRate, parseFloat(helpfulRate) >= 70 ? GREEN : RED);
 
-      // ─── Section 3: Performa Chatbot ───────────────────────────────────
+      // ─── Section 3: Chatbot Performance ───────────────────────────────────
 
       sectionTitle('3.  Performa Chatbot (Confidence Score)');
 
@@ -328,7 +525,6 @@ export class DashboardService {
       labelValue('Minimum', min.toFixed(4));
       labelValue('Maximum', max.toFixed(4));
 
-      // Distribusi Bar — pakai teks blok berwarna, bukan rect + text overlay
       doc.moveDown(0.6);
       doc.fontSize(9).font('Helvetica-Bold').fillColor('#374151').text('Distribusi Akurasi Respons:', LEFT);
       doc.moveDown(0.4);
@@ -338,7 +534,6 @@ export class DashboardService {
       const BAR_HEIGHT = 18;
       const barY = doc.y;
 
-      // Gambar bar segmented
       let barX = LEFT;
       const segments = [
         { count: low, color: RED },
@@ -353,14 +548,12 @@ export class DashboardService {
         }
       });
 
-      // Isi sisa bar jika ada rounding error
       if (barX < RIGHT) {
         doc.rect(barX, barY, RIGHT - barX, BAR_HEIGHT).fill(segments[segments.length - 1].color);
       }
 
       doc.y = barY + BAR_HEIGHT + 6;
 
-      // Legend di bawah bar — masing-masing di baris sendiri biar tidak overlap
       const legendItems = [
         { label: `Rendah (${low}) — confidence 0.0 s.d 0.4`, color: RED },
         { label: `Sedang (${medium}) — confidence 0.4 s.d 0.7`, color: YELLOW },
@@ -374,7 +567,6 @@ export class DashboardService {
         doc.moveDown(0.35);
       });
 
-      // Warning box jika low > high
       if (low > high) {
         doc.moveDown(0.5);
         const warnY = doc.y;
@@ -391,14 +583,14 @@ export class DashboardService {
         doc.y = warnY + 38;
       }
 
-      // ─── Section 4: Status Tiket ───────────────────────────────────────
+      // ─── Section 4: Ticket Status ───────────────────────────────────────
 
       sectionTitle('4.  Status Tiket');
       labelValue('Open / Baru', String(reportData.ticketStats.open));
       labelValue('On Progress / Aktif', String(reportData.ticketStats.onProgress));
       labelValue('Resolved / Selesai', String(reportData.ticketStats.resolved));
 
-      // ─── Section 5: Percakapan Bermasalah ─────────────────────────────
+      // ─── Section 5: Problematic Conversations ─────────────────────────────
 
       const problematic = reportData.problematicConversations ?? [];
       sectionTitle(`5.  Percakapan Bermasalah (${problematic.length})`);
@@ -407,7 +599,6 @@ export class DashboardService {
         doc.fontSize(10).fillColor(GREEN)
           .text('Tidak ada percakapan dengan feedback negatif pada periode ini.', LEFT);
       } else {
-        // Header tabel
         const colW = [185, 110, 140, 60];
         const headers = ['Judul', 'User', 'Email', 'Pesan'];
         const tblY = doc.y;
@@ -448,7 +639,6 @@ export class DashboardService {
       // ─── Footer ────────────────────────────────────────────────────────
 
       doc.moveDown(2);
-      // Garis pembatas footer
       doc.moveTo(LEFT, doc.y).lineTo(RIGHT, doc.y).strokeColor('#e5e7eb').lineWidth(0.5).stroke();
       doc.moveDown(0.4);
       doc.fontSize(8).font('Helvetica').fillColor(GRAY)
@@ -468,8 +658,44 @@ export class DashboardService {
     return { buffer, filename, mimeType: 'application/pdf' };
   }
 
-  // ─── Private: Excel ───────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────────
+  // PRIVATE: EXCEL GENERATION
+  // ─────────────────────────────────────────────────────────────────────────────
 
+  /**
+   * Private: Generate Excel workbook from report data.
+   *
+   * Creates a multi-sheet Excel document containing overview, user satisfaction metrics,
+   * chatbot performance, and ticket status data. Uses ExcelJS library for generation.
+   *
+   * @param reportData - Aggregated report data object (output from getReportData).
+   * @returns Object with buffer (file content), filename, and mimeType for download.
+   *
+   * @throws {BadRequestException} If ExcelJS package is not installed.
+   *
+   * @remarks
+   * Flow:
+   * [STEP 1] Import ExcelJS package (throw if not installed).
+   * [STEP 2] Create workbook with metadata (creator, timestamp).
+   * [STEP 3] Add Sheet 1 (Ringkasan): Period range, aggregated counts, response time, feedback, confidence stats.
+   * [STEP 4] Add Sheet 2 (Daftar Percakapan): Conversations table with feedback status, conditional colors, hyperlinks.
+   * [STEP 5] Add Sheet 3 (Daftar Tiket): Tickets table with status breakdown, color-coding, quick links.
+   * [STEP 6] Freeze header rows on all sheets for navigation.
+   * [STEP 7] Serialize to Buffer and generate filename.
+   * [STEP 8] Return buffer, filename, and Excel MIME type.
+   *
+   * Sheet Structure:
+   * 1. Ringkasan: Period range, conversation/message/ticket counts, escalation rate, SLA metrics.
+   * 2. Daftar Percakapan: Paginated conversations with feedback metadata, quick links.
+   * 3. Daftar Tiket: Paginated tickets with status breakdown, quick links.
+   *
+   * Formatting: Bold headers, fixed column widths, date formatting, conditional row colors.
+   * Color Scheme: Blue (#1D4ED8) headers, red/green/yellow status indicators.
+   * Filename: Eppy_Report_<Period>.xlsx (Indonesian month names).
+   * Quick Links: Excel hyperlinks to admin panel for conversations and tickets.
+   *
+   * Logging: debug (start), debug (workbook_generated with sheet_count and file_size).
+   */
   private async generateExcel(reportData: any): Promise<{
     buffer: Buffer;
     filename: string;
@@ -505,7 +731,7 @@ export class DashboardService {
       border: { bottom: { style: 'thin' as const, color: { argb: 'FFE5E7EB' } } },
     });
 
-    // ── Sheet 1: Ringkasan ──────────────────────────────────────────────────
+    // ── Sheet 1: Overview ──────────────────────────────────────────────────
     const sheet1 = workbook.addWorksheet('Ringkasan');
     sheet1.columns = [
       { key: 'metric', width: 42 },
@@ -548,7 +774,6 @@ export class DashboardService {
 
     summaryRows.forEach(([metric, value], i) => {
       const row = sheet1.addRow({ metric, value });
-      // Bold untuk sub-header section
       if (['RINGKASAN UMUM', 'KEPUASAN USER', 'PERFORMA CHATBOT', 'STATUS TIKET'].includes(metric as string)) {
         row.getCell('metric').font = { bold: true, color: { argb: C.BLUE } };
         row.getCell('metric').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0EFFE' } };
@@ -557,7 +782,7 @@ export class DashboardService {
       }
     });
 
-    // ── Sheet 2: Daftar Percakapan ──────────────────────────────────────────
+    // ── Sheet 2: List of Conversations ──────────────────────────────────────────
     const sheet2 = workbook.addWorksheet('Daftar Percakapan');
     sheet2.columns = [
       { header: 'ID Percakapan', key: 'id', width: 38 },
@@ -604,7 +829,7 @@ export class DashboardService {
       linkCell.font = { color: { argb: C.BLUE }, underline: true };
     });
 
-    // ── Sheet 3: Daftar Tiket ───────────────────────────────────────────────
+    // ── Sheet 3: List of Tickets ───────────────────────────────────────────────
     const sheet3 = workbook.addWorksheet('Daftar Tiket');
     sheet3.columns = [
       { header: 'ID Tiket', key: 'id', width: 38 },
@@ -657,7 +882,6 @@ export class DashboardService {
       linkCell.font = { color: { argb: C.BLUE }, underline: true };
     });
 
-    // Freeze header di semua sheet
     [sheet1, sheet2, sheet3].forEach((sheet) => {
       sheet.views = [{ state: 'frozen', ySplit: 1 }];
     });
