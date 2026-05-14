@@ -13,7 +13,6 @@ function msToHHMMSS(ms: number): string {
   return [hours, minutes, seconds].map((v) => String(v).padStart(2, '0')).join(':');
 }
 
-// Format tanggal ke format Indonesia: "13 Mei 2026, 08:49"
 function formatDateID(date: Date | string): string {
   const d = new Date(date);
   const months = [
@@ -28,7 +27,6 @@ function formatDateID(date: Date | string): string {
   return `${day} ${month} ${year}, ${hours}:${minutes}`;
 }
 
-// Format nama file: "Eppy_Report_Mei_2026"
 function formatReportFilename(startDate: Date, endDate: Date, ext: string): string {
   const months = [
     'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -38,23 +36,19 @@ function formatReportFilename(startDate: Date, endDate: Date, ext: string): stri
   const endMonth = months[endDate.getMonth()];
   const startYear = startDate.getFullYear();
   const endYear = endDate.getFullYear();
-
   const periodLabel =
     startMonth === endMonth && startYear === endYear
       ? `${startMonth}_${startYear}`
       : `${startMonth}_${startYear}-${endMonth}_${endYear}`;
-
   return `Eppy_Report_${periodLabel}.${ext}`;
 }
 
-// Label feedback
 function feedbackLabel(feedback: string | null): string {
   if (feedback === 'HELPFUL') return 'Puas';
   if (feedback === 'NOT_HELPFUL') return 'Tidak Puas';
   return '-';
 }
 
-// Label status tiket
 function statusLabel(status: string): string {
   const map: Record<string, string> = {
     OPEN: 'Baru',
@@ -94,16 +88,16 @@ export class DashboardService {
           : '0%',
     };
 
-    // Bot accuracy warning
     const avgScore = confidenceStats.avg;
     const botAccuracy = {
       score: parseFloat(avgScore.toFixed(4)),
       status: avgScore < 0.5 ? 'LOW' : avgScore < 0.7 ? 'MEDIUM' : 'HIGH',
-      warning: avgScore < 0.5
-        ? 'Bot butuh pelatihan data lebih lanjut'
-        : avgScore < 0.7
-        ? 'Performa bot cukup, masih bisa dioptimasi'
-        : 'Performa bot baik',
+      warning:
+        avgScore < 0.5
+          ? 'Bot butuh pelatihan data lebih lanjut'
+          : avgScore < 0.7
+          ? 'Performa bot cukup, masih bisa dioptimasi'
+          : 'Performa bot baik',
     };
 
     const conversations = conversationsData.conversations.map((conv) => ({
@@ -205,9 +199,7 @@ export class DashboardService {
     format: 'pdf' | 'excel',
   ): Promise<{ buffer: Buffer; filename: string; mimeType: string }> {
     const { data: reportData } = await this.getReport(startDate, endDate);
-    return format === 'excel'
-      ? this.generateExcel(reportData)
-      : this.generatePdf(reportData);
+    return format === 'excel' ? this.generateExcel(reportData) : this.generatePdf(reportData);
   }
 
   // ─── Private: PDF ─────────────────────────────────────────────────────────
@@ -231,195 +223,235 @@ export class DashboardService {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      const PAGE_WIDTH = 495; // A4 - margin kiri kanan
+      const LEFT = 50;
+      const RIGHT = 545;
+      const WIDTH = RIGHT - LEFT;
       const BLUE = '#1d4ed8';
       const GRAY = '#6b7280';
+      const LIGHT_GRAY = '#f3f4f6';
       const RED = '#dc2626';
       const GREEN = '#16a34a';
       const YELLOW = '#d97706';
+      const LIGHT_RED = '#fef2f2';
+      const LIGHT_BLUE = '#eff6ff';
 
-      const addSection = (title: string) => {
-        doc.moveDown(1.5)
-          .fontSize(13)
-          .font('Helvetica-Bold')
-          .fillColor(BLUE)
-          .text(title);
-        doc.moveDown(0.2)
-          .moveTo(50, doc.y)
-          .lineTo(545, doc.y)
-          .strokeColor(BLUE)
-          .stroke();
-        doc.moveDown(0.5).fillColor('black').fontSize(10).font('Helvetica');
+      // ─── Helper functions ───────────────────────────────────────────────
+
+      const sectionTitle = (title: string) => {
+        doc.moveDown(1.2);
+        doc.fontSize(12).font('Helvetica-Bold').fillColor(BLUE).text(title, LEFT);
+        const lineY = doc.y + 2;
+        doc.moveTo(LEFT, lineY).lineTo(RIGHT, lineY).strokeColor(BLUE).lineWidth(1).stroke();
+        doc.moveDown(0.6).fillColor('#111827').fontSize(10).font('Helvetica');
       };
 
-      const addRow = (label: string, value: string, valueColor = 'black') => {
-        doc.font('Helvetica').fillColor(GRAY).text(`${label}`, { continued: true });
-        doc.font('Helvetica-Bold').fillColor(valueColor).text(`  ${value}`);
-        doc.fillColor('black').font('Helvetica');
+      const labelValue = (label: string, value: string, valueColor = '#111827') => {
+        const y = doc.y;
+        doc.fontSize(10).font('Helvetica').fillColor(GRAY).text(label, LEFT, y, { width: 220 });
+        doc.fontSize(10).font('Helvetica-Bold').fillColor(valueColor).text(value, 270, y, { width: 275 });
+        doc.moveDown(0.4);
       };
 
-      // ── Header ──
-      doc.rect(50, 50, PAGE_WIDTH, 70).fill(BLUE);
-      doc.fillColor('white')
-        .fontSize(22)
-        .font('Helvetica-Bold')
-        .text('Eppy Helpdesk', 70, 65);
-      doc.fontSize(11)
-        .font('Helvetica')
-        .text('Laporan Analisis Sistem', 70, 92);
+      const drawBox = (y: number, height: number, color: string) => {
+        doc.rect(LEFT, y, WIDTH, height).fill(color);
+      };
 
-      doc.fillColor('white')
-        .fontSize(10)
+      // ─── Header ────────────────────────────────────────────────────────
+
+      // Background biru
+      doc.rect(LEFT, 45, WIDTH, 65).fill(BLUE);
+
+      doc.fillColor('white').fontSize(20).font('Helvetica-Bold')
+        .text('Eppy Helpdesk', LEFT + 12, 55, { width: WIDTH - 24 });
+
+      doc.fontSize(10).font('Helvetica').fillColor('#bfdbfe')
+        .text('Laporan Analisis Sistem', LEFT + 12, 78, { width: WIDTH - 24 });
+
+      // Tanggal di kanan atas header
+      doc.fontSize(9).fillColor('white')
         .text(
           `Periode: ${formatDateID(reportData.period.startDate)} — ${formatDateID(reportData.period.endDate)}`,
-          50, 105, { align: 'right', width: PAGE_WIDTH },
+          LEFT + 12, 92, { width: WIDTH - 24, align: 'right' },
         );
 
-      doc.moveDown(5);
-      doc.fillColor('black').fontSize(9).font('Helvetica').fillColor(GRAY)
-        .text(`Dibuat pada: ${formatDateID(reportData.generatedAt)}`, { align: 'right' });
+      doc.y = 120;
+      doc.fontSize(8).font('Helvetica').fillColor(GRAY)
+        .text(`Dibuat pada: ${formatDateID(reportData.generatedAt)}`, LEFT, doc.y, {
+          width: WIDTH, align: 'right',
+        });
 
-      // ── Section 1: Ringkasan Umum ──
-      addSection('1. Ringkasan Umum');
-      addRow('Total Percakapan', String(reportData.totalConversations));
-      addRow('Total Pesan', String(reportData.totalMessages));
-      addRow('Total Tiket', String(reportData.totalTickets));
-      addRow('Tingkat Eskalasi', reportData.escalationRate);
+      // ─── Section 1: Ringkasan Umum ─────────────────────────────────────
 
-      // ── SLA Card: Waktu Respon Admin ──
-      doc.moveDown(0.8);
-      doc.rect(50, doc.y, PAGE_WIDTH, 36).fill('#eff6ff');
-      doc.fillColor(BLUE).fontSize(9).font('Helvetica')
-        .text('Rata-rata Waktu Respon Admin (SLA)', 62, doc.y - 30);
-      doc.fontSize(16).font('Helvetica-Bold')
-        .text(reportData.avgResponseTime ?? '00:00:00', 62, doc.y - 14);
-      doc.moveDown(1.5);
+      sectionTitle('1.  Ringkasan Umum');
+      labelValue('Total Percakapan', String(reportData.totalConversations));
+      labelValue('Total Pesan', String(reportData.totalMessages));
+      labelValue('Total Tiket', String(reportData.totalTickets));
+      labelValue('Tingkat Eskalasi', reportData.escalationRate);
 
-      // ── Section 2: Kepuasan User ──
-      addSection('2. Kepuasan User');
-      const { helpful, notHelpful, totalFeedback } = reportData.feedbackStats;
-      addRow('Total Feedback', String(totalFeedback));
-      addRow('Puas (Helpful)', String(helpful), GREEN);
-      addRow('Tidak Puas (Not Helpful)', String(notHelpful), RED);
-      if (totalFeedback > 0) {
-        const rate = ((helpful / totalFeedback) * 100).toFixed(1);
-        addRow('Tingkat Kepuasan', `${rate}%`, parseFloat(rate) >= 70 ? GREEN : RED);
-      }
+      // SLA Card
+      doc.moveDown(0.5);
+      const slaY = doc.y;
+      doc.rect(LEFT, slaY, WIDTH, 38).fill(LIGHT_BLUE);
+      doc.fontSize(8).font('Helvetica').fillColor(BLUE)
+        .text('RATA-RATA WAKTU RESPON ADMIN (SLA)', LEFT + 12, slaY + 8, { width: WIDTH - 24 });
+      doc.fontSize(18).font('Helvetica-Bold').fillColor(BLUE)
+        .text(reportData.avgResponseTime ?? '00:00:00', LEFT + 12, slaY + 19, { width: WIDTH - 24 });
+      doc.y = slaY + 44;
 
-      // ── Section 3: Performa Chatbot ──
-      addSection('3. Performa Chatbot (Confidence Score)');
+      // ─── Section 2: Kepuasan User ──────────────────────────────────────
+
+      sectionTitle('2.  Kepuasan User');
+
+      // fix: gunakan feedbackStats.total bukan totalFeedback
+      const fb = reportData.feedbackStats;
+      const totalFb = fb.total ?? 0;
+      const helpfulRate = totalFb > 0
+        ? `${((fb.helpful / totalFb) * 100).toFixed(1)}%`
+        : '0%';
+
+      labelValue('Total Feedback Diterima', String(totalFb));
+      labelValue('Puas (Helpful)', String(fb.helpful), GREEN);
+      labelValue('Tidak Puas (Not Helpful)', String(fb.notHelpful), RED);
+      labelValue('Tingkat Kepuasan', helpfulRate, parseFloat(helpfulRate) >= 70 ? GREEN : RED);
+
+      // ─── Section 3: Performa Chatbot ───────────────────────────────────
+
+      sectionTitle('3.  Performa Chatbot (Confidence Score)');
 
       const { avg, min, max } = reportData.confidenceStats;
       const avgColor = avg < 0.5 ? RED : avg < 0.7 ? YELLOW : GREEN;
-      addRow('Rata-rata', avg.toFixed(4), avgColor);
-      addRow('Minimum', min.toFixed(4));
-      addRow('Maximum', max.toFixed(4));
+      labelValue('Rata-rata Confidence Score', avg.toFixed(4), avgColor);
+      labelValue('Minimum', min.toFixed(4));
+      labelValue('Maximum', max.toFixed(4));
 
-      // Confidence Health Bar — visualisasi teks
-      doc.moveDown(0.8);
-      doc.font('Helvetica-Bold').fontSize(10).fillColor('black').text('Distribusi Akurasi Respons:');
-      doc.moveDown(0.3);
+      // Distribusi Bar — pakai teks blok berwarna, bukan rect + text overlay
+      doc.moveDown(0.6);
+      doc.fontSize(9).font('Helvetica-Bold').fillColor('#374151').text('Distribusi Akurasi Respons:', LEFT);
+      doc.moveDown(0.4);
 
       const { low, medium, high } = reportData.confidenceDistribution;
       const totalDist = (low + medium + high) || 1;
-      const barWidth = PAGE_WIDTH - 20;
-
-      const segments = [
-        { label: `Rendah (${low})`, count: low, color: RED },
-        { label: `Sedang (${medium})`, count: medium, color: YELLOW },
-        { label: `Tinggi (${high})`, count: high, color: GREEN },
-      ];
-
+      const BAR_HEIGHT = 18;
       const barY = doc.y;
-      let barX = 50;
+
+      // Gambar bar segmented
+      let barX = LEFT;
+      const segments = [
+        { count: low, color: RED },
+        { count: medium, color: YELLOW },
+        { count: high, color: GREEN },
+      ];
       segments.forEach(({ count, color }) => {
-        const w = (count / totalDist) * barWidth;
-        if (w > 0) {
-          doc.rect(barX, barY, w, 16).fill(color);
-          barX += w;
+        const segW = Math.round((count / totalDist) * WIDTH);
+        if (segW > 0) {
+          doc.rect(barX, barY, segW, BAR_HEIGHT).fill(color);
+          barX += segW;
         }
       });
 
-      // Legend
-      doc.moveDown(1.5);
-      let legendX = 50;
-      segments.forEach(({ label, color }) => {
-        doc.rect(legendX, doc.y, 10, 10).fill(color);
-        doc.fillColor('black').fontSize(9).font('Helvetica')
-          .text(label, legendX + 14, doc.y - 10);
-        legendX += 120;
-      });
-      doc.moveDown(0.5);
+      // Isi sisa bar jika ada rounding error
+      if (barX < RIGHT) {
+        doc.rect(barX, barY, RIGHT - barX, BAR_HEIGHT).fill(segments[segments.length - 1].color);
+      }
 
-      // Warning jika low > high
+      doc.y = barY + BAR_HEIGHT + 6;
+
+      // Legend di bawah bar — masing-masing di baris sendiri biar tidak overlap
+      const legendItems = [
+        { label: `Rendah (${low}) — confidence 0.0 s.d 0.4`, color: RED },
+        { label: `Sedang (${medium}) — confidence 0.4 s.d 0.7`, color: YELLOW },
+        { label: `Tinggi (${high}) — confidence 0.7 s.d 1.0`, color: GREEN },
+      ];
+      legendItems.forEach(({ label, color }) => {
+        const lY = doc.y;
+        doc.rect(LEFT, lY + 2, 10, 10).fill(color);
+        doc.fontSize(8).font('Helvetica').fillColor('#374151')
+          .text(label, LEFT + 16, lY, { width: WIDTH - 16 });
+        doc.moveDown(0.35);
+      });
+
+      // Warning box jika low > high
       if (low > high) {
         doc.moveDown(0.5);
-        doc.rect(50, doc.y, PAGE_WIDTH, 24).fill('#fef2f2');
-        doc.fillColor(RED).fontSize(9).font('Helvetica-Bold')
-          .text('⚠ Bot butuh pelatihan data lebih lanjut', 62, doc.y - 18);
-        doc.font('Helvetica').fillColor(GRAY).fontSize(8)
-          .text('Mayoritas respons memiliki akurasi rendah. Pertimbangkan untuk menambah atau memperbaiki dokumen knowledge base.', 62, doc.y - 6);
-        doc.moveDown(1);
+        const warnY = doc.y;
+        doc.rect(LEFT, warnY, WIDTH, 32).fill(LIGHT_RED);
+        doc.fontSize(9).font('Helvetica-Bold').fillColor(RED)
+          .text('PERINGATAN: Bot butuh pelatihan data lebih lanjut', LEFT + 10, warnY + 6, {
+            width: WIDTH - 20,
+          });
+        doc.fontSize(8).font('Helvetica').fillColor('#7f1d1d')
+          .text(
+            'Mayoritas respons memiliki akurasi rendah. Pertimbangkan untuk menambah atau memperbaiki dokumen knowledge base.',
+            LEFT + 10, warnY + 18, { width: WIDTH - 20 },
+          );
+        doc.y = warnY + 38;
       }
 
-      // ── Section 4: Status Tiket ──
-      addSection('4. Status Tiket');
-      addRow('Open (Baru)', String(reportData.ticketStats.open));
-      addRow('On Progress (Aktif)', String(reportData.ticketStats.onProgress));
-      addRow('Resolved (Selesai)', String(reportData.ticketStats.resolved));
+      // ─── Section 4: Status Tiket ───────────────────────────────────────
 
-      // ── Section 5: Percakapan Bermasalah ──
+      sectionTitle('4.  Status Tiket');
+      labelValue('Open / Baru', String(reportData.ticketStats.open));
+      labelValue('On Progress / Aktif', String(reportData.ticketStats.onProgress));
+      labelValue('Resolved / Selesai', String(reportData.ticketStats.resolved));
+
+      // ─── Section 5: Percakapan Bermasalah ─────────────────────────────
+
       const problematic = reportData.problematicConversations ?? [];
-      addSection(`5. Percakapan Bermasalah (${problematic.length} percakapan)`);
+      sectionTitle(`5.  Percakapan Bermasalah (${problematic.length})`);
 
       if (problematic.length === 0) {
-        doc.fontSize(10).fillColor(GREEN).text('Tidak ada percakapan dengan feedback negatif pada periode ini.');
-        doc.fillColor('black');
+        doc.fontSize(10).fillColor(GREEN)
+          .text('Tidak ada percakapan dengan feedback negatif pada periode ini.', LEFT);
       } else {
         // Header tabel
-        const colWidths = [170, 120, 100, 90];
-        const headers = ['Judul', 'User', 'Email', 'Waktu'];
-        const tableX = 50;
-        let tableY = doc.y;
+        const colW = [185, 110, 140, 60];
+        const headers = ['Judul', 'User', 'Email', 'Pesan'];
+        const tblY = doc.y;
 
-        doc.rect(tableX, tableY, PAGE_WIDTH, 16).fill('#fef2f2');
-        let colX = tableX + 4;
+        doc.rect(LEFT, tblY, WIDTH, 16).fill('#fee2e2');
+        let cx = LEFT + 4;
         headers.forEach((h, i) => {
-          doc.fillColor(RED).fontSize(8).font('Helvetica-Bold').text(h, colX, tableY + 4, { width: colWidths[i] });
-          colX += colWidths[i];
+          doc.fontSize(8).font('Helvetica-Bold').fillColor(RED)
+            .text(h, cx, tblY + 4, { width: colW[i] - 4 });
+          cx += colW[i];
         });
-        tableY += 16;
 
+        let rowY = tblY + 16;
         problematic.forEach((conv: any, idx: number) => {
-          if (tableY > 720) {
+          if (rowY > 710) {
             doc.addPage();
-            tableY = 50;
+            rowY = 50;
           }
-          const rowColor = idx % 2 === 0 ? '#fff5f5' : 'white';
-          doc.rect(tableX, tableY, PAGE_WIDTH, 18).fill(rowColor);
+          const rowBg = idx % 2 === 0 ? '#fff5f5' : 'white';
+          doc.rect(LEFT, rowY, WIDTH, 18).fill(rowBg);
           const cells = [
-            conv.title?.slice(0, 28) ?? '-',
-            conv.user?.name ?? '-',
-            conv.user?.email ?? '-',
-            formatDateID(conv.createdAt),
+            (conv.title ?? '-').slice(0, 30),
+            (conv.user?.name ?? '-').slice(0, 18),
+            (conv.user?.email ?? '-').slice(0, 26),
+            String(conv._count?.messages ?? 0),
           ];
-          colX = tableX + 4;
+          cx = LEFT + 4;
           cells.forEach((cell, i) => {
-            doc.fillColor('black').fontSize(8).font('Helvetica')
-              .text(cell, colX, tableY + 5, { width: colWidths[i] - 4 });
-            colX += colWidths[i];
+            doc.fontSize(8).font('Helvetica').fillColor('#111827')
+              .text(cell, cx, rowY + 5, { width: colW[i] - 8 });
+            cx += colW[i];
           });
-          tableY += 18;
+          rowY += 18;
         });
-        doc.y = tableY + 4;
+        doc.y = rowY + 6;
       }
 
-      // ── Footer ──
-      doc.moveDown(3);
-      doc.fontSize(8).fillColor(GRAY)
-        .text('Dokumen ini dibuat otomatis oleh sistem Eppy. © 2026 PT Epson Indonesia Industry', {
-          align: 'center',
-        });
+      // ─── Footer ────────────────────────────────────────────────────────
+
+      doc.moveDown(2);
+      // Garis pembatas footer
+      doc.moveTo(LEFT, doc.y).lineTo(RIGHT, doc.y).strokeColor('#e5e7eb').lineWidth(0.5).stroke();
+      doc.moveDown(0.4);
+      doc.fontSize(8).font('Helvetica').fillColor(GRAY)
+        .text(
+          'Dokumen ini dibuat otomatis oleh sistem Eppy. Hak Cipta 2026 PT Epson Indonesia Industry.',
+          LEFT, doc.y, { width: WIDTH, align: 'center' },
+        );
 
       doc.end();
     });
@@ -450,70 +482,78 @@ export class DashboardService {
     workbook.creator = 'Eppy Helpdesk';
     workbook.created = new Date();
 
-    const BLUE = 'FF1D4ED8';
-    const WHITE = 'FFFFFFFF';
-    const GREEN = 'FF16A34A';
-    const YELLOW = 'FFD97706';
-    const RED = 'FFDC2626';
-    const LIGHT_BLUE = 'FFE0EFFE';
-    const LIGHT_RED = 'FFFEF2F2';
-    const LIGHT_GREEN = 'FFF0FDF4';
-    const LIGHT_YELLOW = 'FFFEFCE8';
+    const C = {
+      BLUE: 'FF1D4ED8',
+      WHITE: 'FFFFFFFF',
+      GREEN: 'FF16A34A',
+      YELLOW: 'FFD97706',
+      RED: 'FFDC2626',
+      LIGHT_GREEN: 'FFF0FDF4',
+      LIGHT_YELLOW: 'FFFEFCE8',
+      LIGHT_RED: 'FFFEF2F2',
+      LIGHT_GRAY: 'FFF9FAFB',
+    };
 
-    const headerStyle = (bgColor: string = BLUE) => ({
-      font: { bold: true, color: { argb: WHITE }, size: 11 },
+    const headerStyle = (bgColor = C.BLUE) => ({
+      font: { bold: true, color: { argb: C.WHITE }, size: 11 },
       fill: { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: bgColor } },
       alignment: { horizontal: 'center' as const, vertical: 'middle' as const },
-      border: {
-        bottom: { style: 'thin' as const, color: { argb: 'FFE5E7EB' } },
-      },
+      border: { bottom: { style: 'thin' as const, color: { argb: 'FFE5E7EB' } } },
     });
 
-    // ── Sheet 1: Ringkasan ──
+    // ── Sheet 1: Ringkasan ──────────────────────────────────────────────────
     const sheet1 = workbook.addWorksheet('Ringkasan');
     sheet1.columns = [
-      { key: 'metric', width: 40 },
-      { key: 'value', width: 25 },
+      { key: 'metric', width: 42 },
+      { key: 'value', width: 28 },
     ];
     sheet1.getRow(1).values = ['Metrik', 'Nilai'];
+    sheet1.getRow(1).height = 22;
     sheet1.getRow(1).eachCell((cell: any) => Object.assign(cell, headerStyle()));
 
+    const fb = reportData.feedbackStats;
     const summaryRows = [
       ['Periode', `${formatDateID(reportData.period.startDate)} — ${formatDateID(reportData.period.endDate)}`],
       ['Dibuat Pada', formatDateID(reportData.generatedAt)],
       ['', ''],
+      ['RINGKASAN UMUM', ''],
       ['Total Percakapan', reportData.totalConversations],
       ['Total Pesan', reportData.totalMessages],
       ['Total Tiket', reportData.totalTickets],
       ['Tingkat Eskalasi', reportData.escalationRate],
-      ['Rata-rata Waktu Respon Admin', reportData.avgResponseTime ?? '-'],
+      ['Rata-rata Waktu Respon Admin (SLA)', reportData.avgResponseTime ?? '-'],
       ['', ''],
-      ['Feedback Puas (Helpful)', reportData.feedbackStats.helpful],
-      ['Feedback Tidak Puas (Not Helpful)', reportData.feedbackStats.notHelpful],
-      ['Total Feedback', reportData.feedbackStats.total],
+      ['KEPUASAN USER', ''],
+      ['Total Feedback', fb.total ?? 0],
+      ['Puas (Helpful)', fb.helpful],
+      ['Tidak Puas (Not Helpful)', fb.notHelpful],
       ['', ''],
+      ['PERFORMA CHATBOT', ''],
       ['Avg Confidence Score', reportData.confidenceStats.avg.toFixed(4)],
       ['Min Confidence Score', reportData.confidenceStats.min.toFixed(4)],
       ['Max Confidence Score', reportData.confidenceStats.max.toFixed(4)],
-      ['Respons Akurasi Rendah (0.0-0.4)', reportData.confidenceDistribution.low],
-      ['Respons Akurasi Sedang (0.4-0.7)', reportData.confidenceDistribution.medium],
-      ['Respons Akurasi Tinggi (0.7-1.0)', reportData.confidenceDistribution.high],
+      ['Akurasi Rendah (0.0 - 0.4)', reportData.confidenceDistribution.low],
+      ['Akurasi Sedang (0.4 - 0.7)', reportData.confidenceDistribution.medium],
+      ['Akurasi Tinggi (0.7 - 1.0)', reportData.confidenceDistribution.high],
       ['', ''],
-      ['Tiket Baru (Open)', reportData.ticketStats.open],
-      ['Tiket Aktif (On Progress)', reportData.ticketStats.onProgress],
-      ['Tiket Selesai (Resolved)', reportData.ticketStats.resolved],
+      ['STATUS TIKET', ''],
+      ['Open / Baru', reportData.ticketStats.open],
+      ['On Progress / Aktif', reportData.ticketStats.onProgress],
+      ['Resolved / Selesai', reportData.ticketStats.resolved],
     ];
 
     summaryRows.forEach(([metric, value], i) => {
       const row = sheet1.addRow({ metric, value });
-      if (i % 2 === 0 && metric !== '') {
-        row.getCell('metric').fill = {
-          type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9FAFB' },
-        };
+      // Bold untuk sub-header section
+      if (['RINGKASAN UMUM', 'KEPUASAN USER', 'PERFORMA CHATBOT', 'STATUS TIKET'].includes(metric as string)) {
+        row.getCell('metric').font = { bold: true, color: { argb: C.BLUE } };
+        row.getCell('metric').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0EFFE' } };
+      } else if (metric !== '' && i % 2 === 0) {
+        row.getCell('metric').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: C.LIGHT_GRAY } };
       }
     });
 
-    // ── Sheet 2: Daftar Percakapan ──
+    // ── Sheet 2: Daftar Percakapan ──────────────────────────────────────────
     const sheet2 = workbook.addWorksheet('Daftar Percakapan');
     sheet2.columns = [
       { header: 'ID Percakapan', key: 'id', width: 38 },
@@ -522,8 +562,9 @@ export class DashboardService {
       { header: 'Jumlah Pesan', key: 'msgCount', width: 16 },
       { header: 'Feedback Terakhir', key: 'feedback', width: 20 },
       { header: 'Waktu', key: 'time', width: 28 },
-      { header: 'Quick Link', key: 'link', width: 55 },
+      { header: 'Quick Link', key: 'link', width: 40 },
     ];
+    sheet2.getRow(1).height = 22;
     sheet2.getRow(1).eachCell((cell: any) => Object.assign(cell, headerStyle()));
 
     (reportData.allConversationsForExcel ?? []).forEach((conv: any, idx: number) => {
@@ -538,30 +579,28 @@ export class DashboardService {
         link: `https://eppy.id/admin/conversations/${conv.id}`,
       });
 
-      // Warna baris berdasarkan feedback
       if (fb === 'NOT_HELPFUL') {
         row.eachCell((cell: any) => {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: LIGHT_RED } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: C.LIGHT_RED } };
         });
-        row.getCell('feedback').font = { color: { argb: RED }, bold: true };
+        row.getCell('feedback').font = { color: { argb: C.RED }, bold: true };
       } else if (fb === 'HELPFUL') {
-        row.getCell('feedback').font = { color: { argb: GREEN }, bold: true };
+        row.getCell('feedback').font = { color: { argb: C.GREEN }, bold: true };
       } else if (idx % 2 === 0) {
         row.eachCell((cell: any) => {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9FAFB' } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: C.LIGHT_GRAY } };
         });
       }
 
-      // Quick link sebagai hyperlink
       const linkCell = row.getCell('link');
       linkCell.value = {
-        text: `Buka percakapan`,
+        text: 'Buka percakapan',
         hyperlink: `https://eppy.id/admin/conversations/${conv.id}`,
       };
-      linkCell.font = { color: { argb: BLUE }, underline: true };
+      linkCell.font = { color: { argb: C.BLUE }, underline: true };
     });
 
-    // ── Sheet 3: Daftar Tiket ──
+    // ── Sheet 3: Daftar Tiket ───────────────────────────────────────────────
     const sheet3 = workbook.addWorksheet('Daftar Tiket');
     sheet3.columns = [
       { header: 'ID Tiket', key: 'id', width: 38 },
@@ -571,11 +610,12 @@ export class DashboardService {
       { header: 'Email', key: 'email', width: 30 },
       { header: 'Waktu Dibuat', key: 'time', width: 28 },
       { header: 'ID Percakapan', key: 'convId', width: 38 },
-      { header: 'Quick Link', key: 'link', width: 55 },
+      { header: 'Quick Link', key: 'link', width: 40 },
     ];
+    sheet3.getRow(1).height = 22;
     sheet3.getRow(1).eachCell((cell: any) => Object.assign(cell, headerStyle()));
 
-    (reportData.allTicketsForExcel ?? []).forEach((ticket: any, idx: number) => {
+    (reportData.allTicketsForExcel ?? []).forEach((ticket: any) => {
       const row = sheet3.addRow({
         id: ticket.id,
         title: ticket.title,
@@ -587,35 +627,33 @@ export class DashboardService {
         link: `https://eppy.id/admin/tickets/${ticket.id}`,
       });
 
-      // Conditional formatting berdasarkan status
       const statusCell = row.getCell('status');
       if (ticket.status === 'RESOLVED') {
-        statusCell.font = { color: { argb: GREEN }, bold: true };
         row.eachCell((cell: any) => {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: LIGHT_GREEN } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: C.LIGHT_GREEN } };
         });
+        statusCell.font = { color: { argb: C.GREEN }, bold: true };
       } else if (ticket.status === 'ON_PROGRESS') {
-        statusCell.font = { color: { argb: YELLOW }, bold: true };
         row.eachCell((cell: any) => {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: LIGHT_YELLOW } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: C.LIGHT_YELLOW } };
         });
-      } else if (ticket.status === 'OPEN') {
-        statusCell.font = { color: { argb: RED }, bold: true };
+        statusCell.font = { color: { argb: C.YELLOW }, bold: true };
+      } else {
         row.eachCell((cell: any) => {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: LIGHT_RED } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: C.LIGHT_RED } };
         });
+        statusCell.font = { color: { argb: C.RED }, bold: true };
       }
 
-      // Quick link
       const linkCell = row.getCell('link');
       linkCell.value = {
         text: 'Buka tiket',
         hyperlink: `https://eppy.id/admin/tickets/${ticket.id}`,
       };
-      linkCell.font = { color: { argb: BLUE }, underline: true };
+      linkCell.font = { color: { argb: C.BLUE }, underline: true };
     });
 
-    // Freeze header row di semua sheet
+    // Freeze header di semua sheet
     [sheet1, sheet2, sheet3].forEach((sheet) => {
       sheet.views = [{ state: 'frozen', ySplit: 1 }];
     });
