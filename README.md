@@ -1,98 +1,239 @@
 <p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
+  <img width="200" height="75" alt="logo eppy 2" src="https://github.com/user-attachments/assets/a6582967-f9d6-456f-8239-7f013efc3536" />
 </p>
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+<h2 align="center"><b>Eppy — Smart Helpdesk Chatbot 🤖</b><br/>Backend Service (NestJS)</h2>
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
+<p align="center">
+  Backend API for an AI-powered helpdesk system built to optimize technical support services at <b>PT Epson Indonesia Industry</b>.
 </p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
 
-## Description
+<p align="center">
+  <img src="https://img.shields.io/badge/NestJS-11.x-E0234E?style=flat&logo=nestjs" />
+  <img src="https://img.shields.io/badge/TypeScript-5.x-3178C6?style=flat&logo=typescript" />
+  <img src="https://img.shields.io/badge/PostgreSQL-pgvector-4169E1?style=flat&logo=postgresql" />
+  <img src="https://img.shields.io/badge/AWS-S3%20%7C%20SES-FF9900?style=flat&logo=amazonaws" />
+  <img src="https://img.shields.io/badge/Prisma-ORM-2D3748?style=flat&logo=prisma" />
+</p>
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+---
 
-## Project setup
+## 📖 About
 
-```bash
-$ npm install
+In high-speed industrial environments, every second counts. **Eppy** is an AI-powered helpdesk orchestrator designed to eliminate technical support bottlenecks at **PT Epson Indonesia** by transforming static knowledge bases into an intelligent, autonomous conversational experience. 🤖
+
+By leveraging **Retrieval-Augmented Generation (RAG)**, Eppy empowers users to resolve technical issues independently and instantly. This **NestJS** backend serves as the **core orchestrator**—managing secure authentication, complex data persistence, and seamless AI integration to deliver high-precision support 24/7.
+
+This project is developed as part of the **Capstone Project (Topic A.5)** for the Computer Science Faculty at **Universitas Brawijaya 2026**, bridging the gap between academic innovation and real-world industrial excellence. 🚀✨
+
+---
+
+## ✨ Features
+
+- 🔐 **Authentication** — JWT-based auth with USER and ADMIN roles
+- 💬 **Chatbot** — AI-powered conversations with Knowledge Base, supports image uploads
+- 📁 **Knowledge Management** — Admin uploads PDF documents; AI automatically processes embeddings
+- 🎫 **Ticket System** — Users create tickets manually when AI responses are unsatisfactory; admins respond via dashboard
+- 📧 **Email Notification** — Automatic email via AWS SES when admin responds to a ticket
+- 📊 **Dashboard Analytics** — Chatbot statistics, user satisfaction, AI performance, PDF & Excel export
+- ☁️ **Cloud Storage** — Image and PDF uploads to AWS S3 with signed URLs
+
+---
+
+## 🛠️ Tech Stack
+
+| Category | Technology |
+|----------|------------|
+| Framework | NestJS 11.x + TypeScript 5.x |
+| Database | PostgreSQL + pgvector (via Prisma ORM) |
+| Authentication | Passport.js + JWT |
+| Cloud Storage | AWS S3 |
+| Email | AWS SES |
+| Containerization | Docker + Docker Compose |
+| CI/ CD | Github Actions |
+| AI Integration | HTTP client to AI Service (Python + LangChain) |
+
+---
+
+## 🏗️ System Architecture
+
+<img width="5121" height="4450" alt="Eppy System Architecture Diagram (mermaid js)" src="https://github.com/user-attachments/assets/f4d7c695-e99f-42eb-b456-6014bd2678df" />
+
+---
+
+## 📂 Folder Structure
+
+```
+src/
+│   app.module.ts
+│   main.ts
+├───ai/
+│   │   ai.module.ts
+│   │   ai.service.ts
+│   └───dto/
+├───auth/
+│   │   auth.controller.ts
+│   │   auth.module.ts
+│   │   auth.repository.ts
+│   │   auth.service.ts
+│   ├───dto/
+│   └───strategies/
+├───chat/
+│   │   chat.controller.ts
+│   │   chat.module.ts
+│   │   chat.repository.ts
+│   │   chat.service.ts
+│   └───dto/
+├───common/
+│   ├───decorators/
+│   ├───filters/
+│   ├───guards/
+│   └───interceptors/
+├───conversation/
+│   │   conversation.controller.ts
+│   │   conversation.module.ts
+│   │   conversation.repository.ts
+│   │   conversation.service.ts
+│   └───dto/
+├───dashboard/
+│       dashboard.controller.ts
+│       dashboard.module.ts
+│       dashboard.repository.ts
+│       dashboard.service.ts
+├───knowledge/
+│   │   knowledge.controller.ts
+│   │   knowledge.module.ts
+│   │   knowledge.repository.ts
+│   │   knowledge.service.ts
+│   └───dto/
+├───mail/
+│   │   mail.module.ts
+│   │   mail.service.ts
+│   └───templates
+├───prisma/
+│       prisma.module.ts
+│       prisma.service.ts
+├───storage/
+│       storage.module.ts
+│       storage.service.ts
+└───ticket/
+    │   ticket.controller.ts
+    │   ticket.module.ts
+    │   ticket.repository.ts
+    │   ticket.service.ts
+    └───dto/
 ```
 
-## Compile and run the project
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- Node.js >= 18.x
+- npm >= 9.x
+- PostgreSQL >= 14.x with `pgvector` extension
+- Docker & Docker Compose (optional)
+- AWS Account (S3 + SES)
+
+### 1. Clone & Install
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+git clone <repository-url>
+cd eppy-be
+npm install
 ```
 
-## Run tests
+### 2. Environment Variables
+
+Create a `.env` file in the root directory:
+
+```env
+# Server
+PORT=3000
+
+# Database
+DATABASE_URL="postgresql://user:password@localhost:5432/eppy_db"
+
+# JWT
+JWT_SECRET_KEY="your_jwt_secret_min_32_chars"
+JWT_EXPIRES_IN="7d"
+
+# AI Service
+AI_SERVICE_URL="http://localhost:8000"
+AI_SERVICE_TIMEOUT_MS=30000
+AI_SERVICE_MOCK=true        # set to false when AI Service is running
+
+# AWS
+AWS_REGION="ap-southeast-1"
+AWS_ACCESS_KEY_ID="your_access_key"
+AWS_SECRET_ACCESS_KEY="your_secret_key"
+AWS_S3_BUCKET_NAME="your_bucket_name"
+STORAGE_TYPE=s3
+```
+
+### 3. Database Setup
 
 ```bash
-# unit tests
-$ npm run test
+# Generate Prisma client
+npx prisma generate
 
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+# Run migrations
+npx prisma migrate dev
 ```
 
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+### 4. Run the Application
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+# Development (hot reload)
+npm run start:dev
+
+# Production
+npm run build
+npm run start:prod
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+Server runs at `http://localhost:3000`
 
-## Resources
+### Alternative: Docker Compose
 
-Check out a few resources that may come in handy when working with NestJS:
+```bash
+# Development
+docker-compose up -d
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+# Production
+docker-compose -f docker-compose.prod.yml up -d
+```
 
-## Support
+---
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+## 📑 API Documentation
 
-## Stay in touch
+Full interactive documentation (Request/Response schemas, examples, and testing) can be accessed via:
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+🔗 [Eppy Documentation](https://documenter.getpostman.com/view/41537989/2sBXqDrNLE)
 
-## License
+---
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+## 🗄️ Database Schema
+
+<img width="7825" height="5967" alt="Eppy Database Schema (mermaid js)" src="https://github.com/user-attachments/assets/a0e3a750-efa8-479b-af3b-1bd80c349013" />
+
+---
+
+## 🔗 Related Repositories
+
+📦 The Frontend Layer [View Repository](https://github.com/Eppy-Team/eppy-fe). Built with Next.js and Tailwind CSS to provide a seamless chat experience and a robust management dashboard for admins.
+
+🧠 The Intelligence Layer [View Repository](https://github.com/Eppy-Team/eppy-ai). A dedicated Python service powered by LangChain that manages document chunking, embeddings, and the RAG pipeline to ensure high-accuracy AI responses.
+
+---
+
+## 👥 Team — Group 3, Capstone A.5
+
+- [@Nikita](https://www.linkedin.com/in/nikita-tsalis-akmalinda-yanisa/) — Product Manager
+- [@Dinda](https://www.linkedin.com/in/dindaazqa/) — Business Analyst
+- [@Pricilia](https://www.linkedin.com/in/pricilia-gladys-simbolon-a84a6b281/) — UI/ UX Designer
+- [@Alif](https://www.linkedin.com/in/alif-muh-iqbal/) — Frontend Developer 
+- [@Abdi](https://www.linkedin.com/in/muktiabdii/) — Backend Developer
+- [@Hafid](https://www.linkedin.com/in/moh-zukhruf-artha-hafidzuddin-5915ab222/) — AI Engineer 
