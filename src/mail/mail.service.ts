@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 import { ticketResponseTemplate } from './templates/ticket-response.template';
+import { resetPasswordTemplate } from './templates/reset-password.template';
 
 /**
  * Mail Service
@@ -124,6 +125,52 @@ export class MailService implements OnModuleInit {
       // Tidak throw — gagal kirim email tidak boleh gagalkan response admin
       this.logger.error(
         `[sendTicketResponseNotification] failed to send email to ${data.toEmail} for ticket ${data.ticketId}`,
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  }
+
+  async sendPasswordResetEmail(data: {
+    toEmail: string;
+    userName: string;
+    resetUrl: string;
+    expiresInMinutes: number;
+  }): Promise<void> {
+    const html = resetPasswordTemplate({
+      userName: data.userName,
+      resetUrl: data.resetUrl,
+      expiresInMinutes: data.expiresInMinutes,
+    });
+ 
+    await this.send({
+      toEmail: data.toEmail,
+      subject: '[Eppy] Password Reset Request',
+      html,
+      context: `password reset for ${data.toEmail}`,
+    });
+  }
+
+  private async send(data: {
+    toEmail: string;
+    subject: string;
+    html: string;
+    context: string;
+  }): Promise<void> {
+    try {
+      await this.sesClient.send(
+        new SendEmailCommand({
+          Source: `Eppy Helpdesk <${this.fromEmail}>`,
+          Destination: { ToAddresses: [data.toEmail] },
+          Message: {
+            Subject: { Data: data.subject, Charset: 'UTF-8' },
+            Body: { Html: { Data: data.html, Charset: 'UTF-8' } },
+          },
+        }),
+      );
+      this.logger.log(`[send] email sent to ${data.toEmail} — ${data.context}`);
+    } catch (error) {
+      this.logger.error(
+        `[send] failed to send email to ${data.toEmail} — ${data.context}`,
         error instanceof Error ? error.message : String(error),
       );
     }
