@@ -99,11 +99,6 @@ export function ticketResponseTemplate(data: {
                   </td>
                 </tr>
               </table>
-
-              <p style="margin:0;color:#6b7280;font-size:13px;line-height:1.6;">
-                Jika Anda masih memiliki pertanyaan, silakan buka percakapan baru di website Eppy
-                atau balas email ini untuk informasi lebih lanjut.
-              </p>
             </td>
           </tr>
 
@@ -111,7 +106,7 @@ export function ticketResponseTemplate(data: {
           <tr>
             <td style="background-color:#f9fafb;border-top:1px solid #e5e7eb;padding:20px 40px;text-align:center;">
               <p style="margin:0;color:#9ca3af;font-size:12px;">
-                Email ini dikirim otomatis oleh sistem Eppy.
+                Email ini dikirim otomatis oleh sistem Eppy
               </p>
               <p style="margin:6px 0 0;color:#d1d5db;font-size:11px;">
                 © 2026 Eppy — PT Epson Indonesia

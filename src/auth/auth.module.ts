@@ -7,6 +7,7 @@ import { AuthController } from './auth.controller';
 import { AuthRepository } from './auth.repository';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { ConfigService } from '@nestjs/config';
+import { MailModule } from 'src/mail/mail.module';
 import { StringValue } from 'ms';
 
 /**
@@ -36,6 +37,7 @@ import { StringValue } from 'ms';
         },
       }),
     }),
+    MailModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, AuthRepository, JwtStrategy, PrismaService],
