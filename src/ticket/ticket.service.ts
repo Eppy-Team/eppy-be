@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import { TicketStatus } from '@prisma/client';
 import { TicketRepository } from './ticket.repository';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UpdateTicketStatusDto } from './dto/update-ticket-status.dto';
@@ -187,6 +188,18 @@ export class TicketService {
       throw new NotFoundException('Ticket not found');
     }
 
+    if (ticket.status !== TicketStatus.OPEN) {
+      throw new BadRequestException(
+        'Ticket status can only be changed when the ticket is still open',
+      );
+    }
+
+    if (dto.status === TicketStatus.RESOLVED) {
+      throw new BadRequestException(
+        'Cannot set status to resolved directly. Use the respond endpoint instead',
+      );
+    }
+
     const updated = await this.ticketRepository.updateStatus(id, dto.status);
     return {
       message: 'Ticket status updated successfully',
@@ -219,6 +232,12 @@ export class TicketService {
     const ticket = await this.ticketRepository.findById(id);
     if (!ticket) {
       throw new NotFoundException('Ticket not found');
+    }
+
+    if (ticket.status === TicketStatus.RESOLVED) {
+      throw new BadRequestException(
+        'Cannot respond to a ticket that is already resolved',
+      );
     }
 
     const updated = await this.ticketRepository.updateAdminResponse(
