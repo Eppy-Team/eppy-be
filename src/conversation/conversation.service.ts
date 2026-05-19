@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { ConversationRepository } from './conversation.repository';
 import { StorageService } from '../storage/storage.service';
 import { CreateConversationDto } from './dto/create-conversation.dto';
@@ -122,6 +126,62 @@ export class ConversationService {
     return {
       message: 'Conversation created',
       data: conversation,
+    };
+  }
+
+  async search(data: {
+    userId: string;
+    keyword: string;
+    page: number;
+    limit: number;
+  }) {
+    const { userId, keyword, page, limit } = data;
+
+    if (!keyword || keyword.trim().length === 0) {
+      throw new BadRequestException('Search keyword cannot be empty');
+    }
+
+    if (keyword.trim().length < 2) {
+      throw new BadRequestException(
+        'Search keyword must be at least 2 characters',
+      );
+    }
+
+    const { conversations, total } =
+      await this.conversationRepository.searchConversations({
+        userId,
+        keyword: keyword.trim(),
+        page,
+        limit,
+      });
+
+    const results = conversations.map((conv) => ({
+      id: conv.id,
+      title: conv.title,
+      createdAt: conv.createdAt,
+      matchCount: conv.messages.length,
+      lastMatchedMessage: conv.messages[0]
+        ? {
+            id: conv.messages[0].id,
+            role: conv.messages[0].role,
+            preview:
+              conv.messages[0].content.slice(0, 150) +
+              (conv.messages[0].content.length > 150 ? '...' : ''),
+            createdAt: conv.messages[0].createdAt,
+          }
+        : null,
+    }));
+
+    return {
+      message: `Found ${total} conversation(s) matching "${keyword.trim()}"`,
+      data: results,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        keyword: keyword.trim(),
+      },
     };
   }
 }

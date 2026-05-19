@@ -135,4 +135,73 @@ export class ConversationRepository {
       },
     });
   }
+
+  async searchConversations(data: {
+    userId: string;
+    keyword: string;
+    page: number;
+    limit: number;
+  }) {
+    const { userId, keyword, page, limit } = data;
+    const skip = (page - 1) * limit;
+
+    const [conversations, total] = await Promise.all([
+      this.prisma.conversation.findMany({
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        where: {
+          userId,
+          messages: {
+            some: {
+              content: {
+                contains: keyword,
+                mode: 'insensitive',
+              },
+            },
+          },
+        },
+        select: {
+          id: true,
+          title: true,
+          createdAt: true,
+          _count: {
+            select: { messages: true },
+          },
+          messages: {
+            where: {
+              content: {
+                contains: keyword,
+                mode: 'insensitive',
+              },
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: {
+              id: true,
+              role: true,
+              content: true,
+              createdAt: true,
+            },
+          },
+        },
+      }),
+ 
+      this.prisma.conversation.count({
+        where: {
+          userId,
+          messages: {
+            some: {
+              content: {
+                contains: keyword,
+                mode: 'insensitive',
+              },
+            },
+          },
+        },
+      }),
+    ]);
+ 
+    return { conversations, total };
+  }
 }
