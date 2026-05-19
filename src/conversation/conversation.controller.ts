@@ -8,6 +8,9 @@ import {
   ParseUUIDPipe,
   HttpCode,
   HttpStatus,
+  Query,
+  DefaultValuePipe,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { ConversationService } from './conversation.service';
 import { CreateConversationDto } from './dto/create-conversation.dto';
@@ -30,7 +33,7 @@ export class ConversationController {
   /**
    * Retrieve a list of conversations for the authenticated user.
    *
-   * Fetches conversations with a preview of the latest message, 
+   * Fetches conversations with a preview of the latest message,
    * sorted by creation date (newest first).
    *
    * @param userId - ID of the authenticated user (injected from JWT).
@@ -44,6 +47,16 @@ export class ConversationController {
     return this.conversationService.findAll(userId);
   }
 
+  @Get('search')
+  async search(
+    @CurrentUser('id') userId: string,
+    @Query('q') keyword: string,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
+  ) {
+    return this.conversationService.search({ userId, keyword, page, limit });
+  }
+
   /**
    * Retrieve chronological message history for a specific conversation.
    *
@@ -53,7 +66,7 @@ export class ConversationController {
    * * @throws {NotFoundException} If conversation is not found or access is denied.
    *
    * @remarks
-   * Authorization is enforced at the repository/service level to ensure 
+   * Authorization is enforced at the repository/service level to ensure
    * the user only accesses their own conversation history.
    */
   @Get(':id/messages')
