@@ -130,6 +130,43 @@ export class MailService implements OnModuleInit {
     }
   }
 
+  /**
+   * Send password reset email with time-limited reset link.
+   *
+   * Renders HTML template with reset URL and sends via AWS SES.
+   * Non-blocking on send failure (error is logged but not thrown).
+   *
+   * @param data - Email content and delivery details.
+   * @param data.toEmail - Recipient email address (should be verified as user email).
+   * @param data.userName - User's display name for personalization.
+   * @param data.resetUrl - Full frontend URL with reset token as query param.
+   * @param data.expiresInMinutes - Token expiry duration in minutes (used in email for UX).
+   *
+   * @returns Promise that resolves when email is sent or error is caught.
+   *
+   * @remarks
+   * Flow:
+   * [STEP 1] Render HTML email template with user data and reset URL.
+   * [STEP 2] Construct SES SendEmailCommand with sender, recipient, subject, and HTML body.
+   * [STEP 3] Send email via AWS SES.
+   * [STEP 4] Log success with recipient email and context.
+   * [STEP 5] Catch and log errors without throwing (non-blocking).
+   *
+   * Security:
+   * - Reset URL must include raw (unhashed) token in query params.
+   * - Email sender is verified AWS SES identity (eppychatbot@gmail.com).
+   * - HTML template is pre-rendered (no injection risk from user data).
+   * - Email address is user-provided but should be validated before calling.
+   *
+   * Error Handling:
+   * - SES failures are logged but do not block caller (async fire-and-forget).
+   * - Common failures: rate limits, unverified sender, invalid recipient.
+   * - Logging includes email address and error message for troubleshooting.
+   *
+   * Logging:
+   * - Success: [send] email sent to {email} — password_reset_for_{email}
+   * - Error: [send] failed to send email to {email} — password_reset_for_{email}
+   */
   async sendPasswordResetEmail(data: {
     toEmail: string;
     userName: string;

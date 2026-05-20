@@ -131,6 +131,37 @@ export class AuthService {
     };
   }
 
+  /**
+   * Initiate password reset flow for forgotten account password.
+   *
+   * Generates a cryptographically secure reset token, stores hashed token in database,
+   * and sends reset email with frontend link. Returns generic success to prevent enumeration.
+   *
+   * @param dto - Email address for password reset request.
+   * @returns Generic success response object with null data.
+   *
+   * @remarks
+   * Flow:
+   * [STEP 1] Query database for user by email (non-blocking if not found).
+   * [STEP 2] Generate 32-byte cryptographically random token.
+   * [STEP 3] Hash token using SHA256 for secure storage.
+   * [STEP 4] Calculate expiry timestamp (15 minutes from now).
+   * [STEP 5] Store token hash in database with user reference.
+   * [STEP 6] Construct frontend reset link with raw token as query param.
+   * [STEP 7] Send password reset email (non-blocking on send failure).
+   * [STEP 8] Return generic success message.
+   *
+   * Security:
+   * - Token is 32 bytes from crypto.randomBytes (cryptographically secure).
+   * - Token is hashed with SHA256 before storage (one-way function).
+   * - Generic success response prevents account enumeration.
+   * - Email failure does not throw (logged and recovered gracefully).
+   * - Any existing reset tokens for same user are deleted (one active per user).
+   * - Reset token has 15-minute hard expiry.
+   *
+   * Logging:
+   * - No explicit logging (generic response prevents information leakage).
+   */
   async forgotPassword(dto: ForgotPasswordDto) {
     const user = await this.authRepository.findUserByEmail(dto.email);
 
@@ -179,6 +210,39 @@ export class AuthService {
     };
   }
 
+  /**
+   * Complete password reset using valid reset token.
+   *
+   * Validates reset token authenticity, expiry, and one-time use constraint.
+   * Updates user password to new bcrypt hash and invalidates token.
+   *
+   * @param dto - Reset token and new password payload.
+   * @returns Success response with message.
+   *
+   * @throws {BadRequestException} If token is invalid, expired, or already used.
+   *
+   * @remarks
+   * Flow:
+   * [STEP 1] Hash incoming raw token using SHA256 (same as storage hash).
+   * [STEP 2] Query database for token hash record.
+   * [STEP 3] Return 400 if token hash not found (invalid or already used).
+   * [STEP 4] Compare current timestamp against token expiry.
+   * [STEP 5] If expired: delete token and throw 400 with expiry message.
+   * [STEP 6] Hash new password with bcrypt (cost factor 10).
+   * [STEP 7] Update user record with new password hash (atomic transaction).
+   * [STEP 8] Delete reset token record (one-time use enforcement).
+   * [STEP 9] Return success response with login instructions.
+   *
+   * Security:
+   * - Token comparison uses SHA256 hash (matching storage method).
+   * - Password hash uses bcrypt with cost factor 10 (optimal security/performance).
+   * - Expired tokens are actively deleted to prevent accumulation.
+   * - One-time use enforced via immediate token deletion after use.
+   * - Timing-safe comparison via cryptographic hash (not string equality).
+   *
+   * Logging:
+   * - Error cases logged at WARN/ERROR level for security monitoring.
+   */
   async resetPassword(dto: ResetPasswordDto) {
     const tokenHash = crypto
       .createHash('sha256')
