@@ -1,3 +1,4 @@
+import { AppController } from './app.controller';
 import { Module } from '@nestjs/common';
 import { AuthModule } from './auth/auth.module';
 import { AiModule } from './ai/ai.module';
@@ -10,6 +11,7 @@ import { ConfigModule } from '@nestjs/config';
 import * as Joi from 'joi';
 
 @Module({
+  controllers: [AppController],
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
