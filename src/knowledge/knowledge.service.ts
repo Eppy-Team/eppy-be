@@ -40,9 +40,22 @@ export class KnowledgeService {
       take: limit,
     });
 
+    // Re-generate signed URL
+    const articlesWithFreshUrls = await Promise.all(
+      articles.map(async (article) => {
+        if (article.fileKey) {
+          const freshUrl = await this.storageService.generateSignedUrl(
+            article.fileKey,
+          );
+          return { ...article, fileUrl: freshUrl };
+        }
+        return article;
+      }),
+    );
+
     return {
       message: 'Articles retrieved',
-      data: articles,
+      data: articlesWithFreshUrls,
       meta: {
         total,
         page,
@@ -60,9 +73,19 @@ export class KnowledgeService {
    */
   async findById(id: string) {
     const article = await this.knowledgeRepository.findById(id);
-    if (!article) {
-      throw new NotFoundException('Knowledge article not found');
+    if (!article) throw new NotFoundException('Knowledge article not found');
+
+    // Re-generate signed URL
+    if (article.fileKey) {
+      const freshUrl = await this.storageService.generateSignedUrl(
+        article.fileKey,
+      );
+      return {
+        message: 'Article retrieved',
+        data: { ...article, fileUrl: freshUrl },
+      };
     }
+
     return {
       message: 'Article retrieved',
       data: article,
@@ -246,7 +269,10 @@ export class KnowledgeService {
       );
     }
 
-    if (storageResult.status === 'fulfilled' && aiResult.status === 'fulfilled') {
+    if (
+      storageResult.status === 'fulfilled' &&
+      aiResult.status === 'fulfilled'
+    ) {
       this.logger.log(`[cleanup] All resources cleaned up for ${articleId}`);
     }
   }
