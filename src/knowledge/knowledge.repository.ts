@@ -50,6 +50,7 @@ export class KnowledgeRepository {
           title: true,
           category: true,
           fileUrl: true,
+          fileKey: true,
           embeddingStatus: true,
           createdAt: true,
           updatedAt: true,
