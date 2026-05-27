@@ -156,12 +156,19 @@ export class DashboardService {
    * Logging: debug (entry), log (success with helpful_count, avg_confidence, total_conversations).
    */
   async getChatbotDashboard(page: number, limit: number, status?: string) {
+
+    const formattedStatus = status ? status.toUpperCase() : undefined;
+
+    if (formattedStatus && formattedStatus !== 'HELPFUL' && formattedStatus !== 'NOT_HELPFUL') {
+      throw new BadRequestException('Status filter harus "HELPFUL" atau "NOT_HELPFUL"');
+    }
+
     const [feedbackStats, confidenceStats, confidenceDistribution, conversationsData] =
       await Promise.all([
         this.dashboardRepository.getFeedbackStats(),
         this.dashboardRepository.getConfidenceStats(),
         this.dashboardRepository.getConfidenceDistribution(),
-        this.dashboardRepository.getAllConversations(page, limit, status),
+        this.dashboardRepository.getAllConversations(page, limit, formattedStatus),
       ]);
 
     const satisfactionChart = {
@@ -241,10 +248,21 @@ export class DashboardService {
    * Logging: debug (entry), log (success with ticket_counts and avg_response_time).
    */
   async getTicketDashboard(page: number, limit: number, status?: TicketStatus) {
+    let formattedStatus: any = undefined;
+    if (status) {
+      formattedStatus = status.replace(/[-\s]/g, '_').toUpperCase();
+    }
+
+    const validStatuses = ['OPEN', 'ON_PROGRESS', 'RESOLVED'];
+    if (formattedStatus && !validStatuses.includes(formattedStatus)) {
+      throw new BadRequestException(
+        'Status tiket harus berupa "OPEN", "ON_PROGRESS", atau "RESOLVED"'
+      );
+    }
     const [ticketStats, avgResponseTimeMs, ticketsData] = await Promise.all([
       this.dashboardRepository.getTicketStats(),
       this.dashboardRepository.getAverageResponseTime(),
-      this.dashboardRepository.getAllTickets(page, limit, status),
+      this.dashboardRepository.getAllTickets(page, limit, formattedStatus),
     ]);
 
     return {
