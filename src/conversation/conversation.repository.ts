@@ -136,6 +136,42 @@ export class ConversationRepository {
     });
   }
 
+  /**
+   * Search conversations by message content with pagination support.
+   *
+   * Performs optimized case-insensitive substring search across messages
+   * within user-owned conversations. Returns both result set and total count
+   * in a single database call for efficient pagination.
+   *
+   * @param data - Search configuration object.
+   * @param data.userId - User ID for ownership verification.
+   * @param data.keyword - Search term (minimum 2 characters already validated by caller).
+   * @param data.page - Page number for pagination (1-indexed).
+   * @param data.limit - Results per page.
+   * @returns Object containing paginated conversations array and total match count.
+   *
+   * @remarks
+   * Query Strategy:
+   * - Uses Prisma `where.messages.some` to filter conversations by nested message content.
+   * - Case-insensitive search via `mode: 'insensitive'` in Prisma where clause.
+   * - Pagination via `skip` and `take` (skip = (page - 1) * limit).
+   * - Optimized with `select` to fetch only necessary fields (id, title, createdAt, _count).
+   * - Fetches only the latest matching message per conversation for preview.
+   *
+   * Optimization:
+   * - Parallel execution: Conversations fetch and count query run simultaneously via Promise.all.
+   * - Single database roundtrip per Promise.all block (not sequential queries).
+   * - Message count provided via `_count` for total matching messages indicator.
+   *
+   * Security:
+   * - Data strictly filtered by userId at database level.
+   * - No cross-user data leakage possible.
+   *
+   * Field Selection:
+   * - Fetches: id, title, createdAt, messageCount (_count.messages), matched messages.
+   * - Excludes: userId, updatedAt, and other internal fields.
+   * - Message fields: id, role, content, createdAt (for preview).
+   */
   async searchConversations(data: {
     userId: string;
     keyword: string;

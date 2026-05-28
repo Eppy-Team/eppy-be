@@ -129,6 +129,45 @@ export class ConversationService {
     };
   }
 
+  /**
+   * Search conversations by message content within a user's conversation history.
+   *
+   * Performs full-text search across all messages within a user's conversations,
+   * returning matching conversations with pagination and metadata about matches.
+   * Validates keyword length and enforces user data isolation.
+   *
+   * @param data - Search parameters object.
+   * @param data.userId - ID of the authenticated user (for ownership verification).
+   * @param data.keyword - Search term (minimum 2 characters, case-insensitive).
+   * @param data.page - Page number for pagination (1-indexed, default: 1).
+   * @param data.limit - Number of results per page (default: 10).
+   * @returns Paginated search results with match metadata and total count.
+   * @throws {BadRequestException} If keyword is empty or less than 2 characters.
+   *
+   * @remarks
+   * Flow:
+   * [STEP 1] Validate keyword is not empty or whitespace-only.
+   * [STEP 2] Validate keyword has minimum length of 2 characters.
+   * [STEP 3] Query repository for conversations matching keyword in messages.
+   * [STEP 4] Map results to include match count and preview of last matched message.
+   * [STEP 5] Return paginated results with total count and metadata.
+   *
+   * Search Strategy:
+   * - Case-insensitive substring matching across message content.
+   * - Searches within conversations owned by the authenticated user only.
+   * - Returns latest matching message per conversation as preview.
+   * - Preview truncates to 150 characters with ellipsis if longer.
+   * - Results include pagination metadata (totalPages, total, page, limit).
+   *
+   * Performance:
+   * - Uses database-level filtering for efficient large-scale searches.
+   * - Pagination prevents memory exhaustion on large result sets.
+   * - Single database roundtrip for both data and count via Promise.all.
+   *
+   * Data Isolation:
+   * - All results strictly filtered by authenticated userId.
+   * - Prevents cross-user data leakage.
+   */
   async search(data: {
     userId: string;
     keyword: string;

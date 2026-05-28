@@ -47,6 +47,57 @@ export class ConversationController {
     return this.conversationService.findAll(userId);
   }
 
+  /**
+   * Search conversations by message content.
+   *
+   * Searches across all messages within a user's conversations and returns
+   * matching conversations with pagination support. Each result includes a preview
+   * of the most recent matching message and match metadata.
+   *
+   * @param userId - ID of the authenticated user (injected from JWT).
+   * @param keyword - Search query term (minimum 2 characters, case-insensitive).
+   * @param page - Page number for pagination (default: 1, 1-indexed).
+   * @param limit - Number of results per page (default: 10).
+   * @returns Paginated search results with conversation metadata and match previews.
+   *
+   * @remarks
+   * Query Parameters:
+   * - `q` (required): Search keyword, minimum 2 characters.
+   * - `page` (optional): Page number for pagination, defaults to 1.
+   * - `limit` (optional): Results per page, defaults to 10.
+   *
+   * Authorization:
+   * - All endpoints are protected and user-scoped.
+   * - Results only include conversations owned by the authenticated user.
+   *
+   * @example
+   * GET /conversations/search?q=project&page=1&limit=10
+   * Response:
+   * {
+   *   "message": "Found 3 conversation(s) matching \"project\"",
+   *   "data": [
+   *     {
+   *       "id": "uuid",
+   *       "title": "Project Discussion",
+   *       "createdAt": "2026-05-20T10:00:00Z",
+   *       "matchCount": 2,
+   *       "lastMatchedMessage": {
+   *         "id": "uuid",
+   *         "role": "user",
+   *         "preview": "We discussed the project requirements...",
+   *         "createdAt": "2026-05-20T12:30:00Z"
+   *       }
+   *     }
+   *   ],
+   *   "meta": {
+   *     "total": 3,
+   *     "page": 1,
+   *     "limit": 10,
+   *     "totalPages": 1,
+   *     "keyword": "project"
+   *   }
+   * }
+   */
   @Get('search')
   async search(
     @CurrentUser('id') userId: string,
