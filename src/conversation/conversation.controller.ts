@@ -122,10 +122,16 @@ export class ConversationController {
    */
   @Get(':id/messages')
   async findMessages(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id', ParseUUIDPipe) conversationId: string,
     @CurrentUser('id') userId: string,
+    @CurrentUser('role') role: string,
   ) {
-    return this.conversationService.findMessages(id, userId);
+    const isAdmin = role === 'ADMIN';
+    return this.conversationService.findMessages(
+      conversationId,
+      userId,
+      isAdmin,
+    );
   }
 
   /**

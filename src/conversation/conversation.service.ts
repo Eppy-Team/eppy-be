@@ -69,34 +69,26 @@ export class ConversationService {
    * The `imageKey` field is stripped from responses for security; only the `imageUrl` is returned.
    * Operations are parallelized for performance.
    */
-  async findMessages(conversationId: string, userId: string) {
+  async findMessages(conversationId: string, userId: string, isAdmin = false) {
     const messages = await this.conversationRepository.findMessages(
       conversationId,
       userId,
+      isAdmin,
     );
 
     if (!messages) {
       throw new NotFoundException('Conversation not found');
     }
 
-    // Re-generate fresh signed URL untuk setiap message yang punya gambar
-    // Dilakukan paralel agar tidak lambat
     const messagesWithFreshUrls = await Promise.all(
       messages.map(async (message) => {
         if (message.imageKey) {
           const freshUrl = await this.storageService.generateSignedUrl(
             message.imageKey,
           );
-          return {
-            ...message,
-            imageUrl: freshUrl,
-            imageKey: undefined,
-          };
+          return { ...message, imageUrl: freshUrl, imageKey: undefined };
         }
-        return {
-          ...message,
-          imageKey: undefined,
-        };
+        return { ...message, imageKey: undefined };
       }),
     );
 
