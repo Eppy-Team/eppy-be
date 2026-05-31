@@ -90,9 +90,12 @@ export class ConversationRepository {
    * Authorization: Returns null on ownership mismatch; service layer handles 404/403 responses.
    * Image Handling: imageKey is persisted to support signed URL regeneration on client requests.
    */
-  async findMessages(conversationId: string, userId: string) {
+  async findMessages(conversationId: string, userId: string, isAdmin = false) {
     const conversation = await this.prisma.conversation.findFirst({
-      where: { id: conversationId, userId },
+      where: {
+        id: conversationId,
+        ...(isAdmin ? {} : { userId }),
+      },
     });
 
     if (!conversation) return null;
@@ -222,7 +225,7 @@ export class ConversationRepository {
           },
         },
       }),
- 
+
       this.prisma.conversation.count({
         where: {
           userId,
@@ -237,7 +240,7 @@ export class ConversationRepository {
         },
       }),
     ]);
- 
+
     return { conversations, total };
   }
 }
